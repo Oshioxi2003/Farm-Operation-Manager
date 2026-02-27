@@ -23,16 +23,16 @@ const statusColors: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
-  todo: "Cho lam",
-  doing: "Dang lam",
-  done: "Hoan thanh",
-  overdue: "Qua han",
+  todo: "Chờ làm",
+  doing: "Đang làm",
+  done: "Hoàn thành",
+  overdue: "Quá hạn",
 };
 
 const priorityLabels: Record<string, string> = {
   high: "Cao",
   medium: "TB",
-  low: "Thap",
+  low: "Thấp",
 };
 
 const severityColors: Record<string, string> = {
@@ -75,64 +75,64 @@ export default function Dashboard() {
   };
 
   const kpiCards = [
-    { label: "Mua vu dang chay", value: stats?.activeSeasons || 0, icon: CalendarDays, color: "text-chart-2", bg: "bg-chart-2/10" },
-    { label: "Viec hom nay", value: stats?.todayTasks || 0, icon: ClipboardList, color: "text-chart-1", bg: "bg-chart-1/10" },
-    { label: "Vat tu sap het", value: stats?.lowStockCount || 0, icon: AlertTriangle, color: "text-chart-3", bg: "bg-chart-3/10" },
-    { label: "Canh bao", value: stats?.unreadAlerts || 0, icon: CloudRain, color: "text-destructive", bg: "bg-destructive/10" },
+    { label: "Mùa vụ đang chạy", value: stats?.activeSeasons || 0, icon: CalendarDays, color: "text-chart-2", bg: "bg-chart-2/10" },
+    { label: "Việc hôm nay", value: stats?.todayTasks || 0, icon: ClipboardList, color: "text-chart-1", bg: "bg-chart-1/10" },
+    { label: "Vật tư sắp hết", value: stats?.lowStockCount || 0, icon: AlertTriangle, color: "text-chart-3", bg: "bg-chart-3/10" },
+    { label: "Cảnh báo", value: stats?.unreadAlerts || 0, icon: CloudRain, color: "text-destructive", bg: "bg-destructive/10" },
   ];
 
   return (
     <ScrollArea className="h-full">
       <div className="p-4 md:p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Tong quan</h1>
-          <p className="text-muted-foreground text-sm mt-1">Xin chao, Nguyen Van Minh. Tong quan hoat dong hom nay.</p>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">Tổng quan</h1>
+          <p className="text-muted-foreground text-sm mt-1">Xin chào, Nguyễn Văn Minh. Tổng quan hoạt động hôm nay.</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {statsLoading
             ? Array.from({ length: 4 }).map((_, i) => (
-                <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
-              ))
+              <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+            ))
             : kpiCards.map((kpi) => (
-                <Card key={kpi.label}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${kpi.bg}`}>
-                        <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold" data-testid={`text-kpi-${kpi.label.replace(/ /g, "-")}`}>{kpi.value}</p>
-                        <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                      </div>
+              <Card key={kpi.label}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${kpi.bg}`}>
+                      <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    <div>
+                      <p className="text-2xl font-bold" data-testid={`text-kpi-${kpi.label.replace(/ /g, "-")}`}>{kpi.value}</p>
+                      <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-                <CardTitle className="text-base font-semibold">Viec can lam hom nay</CardTitle>
+                <CardTitle className="text-base font-semibold">Việc cần làm hôm nay</CardTitle>
                 <Link href="/tasks">
                   <Button variant="ghost" size="sm" data-testid="link-view-all-tasks">
-                    Xem tat ca <ArrowRight className="ml-1 h-3 w-3" />
+                    Xem tất cả <ArrowRight className="ml-1 h-3 w-3" />
                   </Button>
                 </Link>
               </CardHeader>
               <CardContent>
                 <div className="flex gap-3 mb-4 flex-wrap">
                   <Badge variant="secondary" className="no-default-active-elevate">
-                    <Clock className="mr-1 h-3 w-3" /> Cho lam: {taskStatusCounts.todo}
+                    <Clock className="mr-1 h-3 w-3" /> Chờ làm: {taskStatusCounts.todo}
                   </Badge>
                   <Badge variant="secondary" className="no-default-active-elevate">
-                    <Sprout className="mr-1 h-3 w-3" /> Dang lam: {taskStatusCounts.doing}
+                    <Sprout className="mr-1 h-3 w-3" /> Đang làm: {taskStatusCounts.doing}
                   </Badge>
                   {taskStatusCounts.overdue > 0 && (
                     <Badge variant="destructive" className="no-default-active-elevate">
-                      <AlertTriangle className="mr-1 h-3 w-3" /> Qua han: {taskStatusCounts.overdue}
+                      <AlertTriangle className="mr-1 h-3 w-3" /> Quá hạn: {taskStatusCounts.overdue}
                     </Badge>
                   )}
                 </div>
@@ -169,7 +169,7 @@ export default function Dashboard() {
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
                     <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Khong co viec can lam hom nay</p>
+                    <p className="text-sm">Không có việc cần làm hôm nay</p>
                   </div>
                 )}
               </CardContent>
@@ -177,7 +177,7 @@ export default function Dashboard() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Nhiet do & Do am (24h)</CardTitle>
+                <CardTitle className="text-base font-semibold">Nhiệt độ & Độ ẩm (24h)</CardTitle>
               </CardHeader>
               <CardContent>
                 {climateChartData.length > 0 ? (
@@ -204,8 +204,8 @@ export default function Dashboard() {
                           fontSize: "12px",
                         }}
                       />
-                      <Area type="monotone" dataKey="temp" stroke="hsl(var(--chart-5))" fill="url(#tempGrad)" name="Nhiet do (C)" />
-                      <Area type="monotone" dataKey="humidity" stroke="hsl(var(--chart-1))" fill="url(#humidGrad)" name="Do am (%)" />
+                      <Area type="monotone" dataKey="temp" stroke="hsl(var(--chart-5))" fill="url(#tempGrad)" name="Nhiệt độ (C)" />
+                      <Area type="monotone" dataKey="humidity" stroke="hsl(var(--chart-1))" fill="url(#humidGrad)" name="Độ ẩm (%)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
@@ -216,7 +216,7 @@ export default function Dashboard() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Luong mua (24h)</CardTitle>
+                <CardTitle className="text-base font-semibold">Lượng mưa (24h)</CardTitle>
               </CardHeader>
               <CardContent>
                 {climateChartData.length > 0 ? (
@@ -233,7 +233,7 @@ export default function Dashboard() {
                           fontSize: "12px",
                         }}
                       />
-                      <Bar dataKey="rainfall" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Mua (mm)" />
+                      <Bar dataKey="rainfall" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Mưa (mm)" />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -248,7 +248,7 @@ export default function Dashboard() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
-                  Canh bao
+                  Cảnh báo
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -266,17 +266,17 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">Khong co canh bao moi</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">Không có cảnh báo mới</p>
                 )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-                <CardTitle className="text-base font-semibold">Kho vat tu</CardTitle>
+                <CardTitle className="text-base font-semibold">Kho vật tư</CardTitle>
                 <Link href="/supplies">
                   <Button variant="ghost" size="sm" data-testid="link-view-supplies">
-                    Chi tiet <ArrowRight className="ml-1 h-3 w-3" />
+                    Chi tiết <ArrowRight className="ml-1 h-3 w-3" />
                   </Button>
                 </Link>
               </CardHeader>
@@ -286,13 +286,13 @@ export default function Dashboard() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-chart-3/10 mx-auto mb-2">
                       <AlertTriangle className="h-6 w-6 text-chart-3" />
                     </div>
-                    <p className="text-sm font-medium">{stats.lowStockCount} vat tu can nhap them</p>
-                    <p className="text-xs text-muted-foreground mt-1">Bam de xem chi tiet va nhap kho</p>
+                    <p className="text-sm font-medium">{stats.lowStockCount} vật tư cần nhập thêm</p>
+                    <p className="text-xs text-muted-foreground mt-1">Bấm để xem chi tiết và nhập kho</p>
                   </div>
                 ) : (
                   <div className="text-center py-4 text-muted-foreground">
                     <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Kho vat tu du dung</p>
+                    <p className="text-sm">Kho vật tư đủ dùng</p>
                   </div>
                 )}
               </CardContent>

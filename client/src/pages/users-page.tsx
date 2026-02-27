@@ -17,8 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { User } from "@shared/schema";
 
 const roleLabels: Record<string, string> = {
-  manager: "Quan ly",
-  farmer: "Nong dan",
+  manager: "Quản lý",
+  farmer: "Nông dân",
 };
 
 export default function UsersPage() {
@@ -35,7 +35,7 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setOpen(false);
-      toast({ title: "Thanh cong", description: "Da them nguoi dung" });
+      toast({ title: "Thành công", description: "Đã thêm người dùng" });
     },
   });
 
@@ -56,48 +56,48 @@ export default function UsersPage() {
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Nguoi dung & Phan quyen</h1>
-            <p className="text-sm text-muted-foreground mt-1">Quan ly tai khoan va phan quyen he thong</p>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Người dùng & Phân quyền</h1>
+            <p className="text-sm text-muted-foreground mt-1">Quản lý tài khoản và phân quyền hệ thống</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-user"><Plus className="mr-1 h-4 w-4" /> Them nguoi dung</Button>
+              <Button data-testid="button-add-user"><Plus className="mr-1 h-4 w-4" /> Thêm người dùng</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Them nguoi dung moi</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Thêm người dùng mới</DialogTitle></DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="fullName">Ho ten *</Label>
+                  <Label htmlFor="fullName">Họ tên *</Label>
                   <Input id="fullName" name="fullName" required data-testid="input-user-fullname" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="username">Ten dang nhap *</Label>
+                    <Label htmlFor="username">Tên đăng nhập *</Label>
                     <Input id="username" name="username" required data-testid="input-user-username" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="password">Mat khau *</Label>
+                    <Label htmlFor="password">Mật khẩu *</Label>
                     <Input id="password" name="password" type="password" required data-testid="input-user-password" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Vai tro</Label>
+                    <Label>Vai trò</Label>
                     <Select name="role" defaultValue="farmer">
                       <SelectTrigger data-testid="select-user-role"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="farmer">Nong dan</SelectItem>
-                        <SelectItem value="manager">Quan ly</SelectItem>
+                        <SelectItem value="farmer">Nông dân</SelectItem>
+                        <SelectItem value="manager">Quản lý</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="phone">So dien thoai</Label>
+                    <Label htmlFor="phone">Số điện thoại</Label>
                     <Input id="phone" name="phone" data-testid="input-user-phone" />
                   </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-user">
-                  {createMutation.isPending ? "Dang luu..." : "Them nguoi dung"}
+                  {createMutation.isPending ? "Đang lưu..." : "Thêm người dùng"}
                 </Button>
               </form>
             </DialogContent>
@@ -144,7 +144,7 @@ export default function UsersPage() {
         ) : (
           <div className="text-center py-16">
             <Users className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">Chua co nguoi dung nao</p>
+            <p className="text-muted-foreground">Chưa có người dùng nào</p>
           </div>
         )}
       </div>

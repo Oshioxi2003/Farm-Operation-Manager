@@ -15,11 +15,13 @@ import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Crop } from "@shared/schema";
+import { useAuth } from "@/lib/auth-context";
 
 export default function Crops() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { isManager } = useAuth();
 
   const { data: crops, isLoading } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
 
@@ -31,7 +33,7 @@ export default function Crops() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crops"] });
       setOpen(false);
-      toast({ title: "Thanh cong", description: "Da them cay trong moi" });
+      toast({ title: "Thành công", description: "Đã thêm cây trồng mới" });
     },
   });
 
@@ -60,58 +62,58 @@ export default function Crops() {
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Cay trong</h1>
-            <p className="text-sm text-muted-foreground mt-1">Quan ly danh sach cay trong va huong dan cham soc</p>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Cây trồng</h1>
+            <p className="text-sm text-muted-foreground mt-1">Quản lý danh sách cây trồng và hướng dẫn chăm sóc</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-crop"><Plus className="mr-1 h-4 w-4" /> Them cay</Button>
-            </DialogTrigger>
+            {isManager && <DialogTrigger asChild>
+              <Button data-testid="button-add-crop"><Plus className="mr-1 h-4 w-4" /> Thêm cây</Button>
+            </DialogTrigger>}
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Them cay trong moi</DialogTitle>
+                <DialogTitle>Thêm cây trồng mới</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="name">Ten cay *</Label>
+                    <Label htmlFor="name">Tên cây *</Label>
                     <Input id="name" name="name" required data-testid="input-crop-name" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="variety">Giong</Label>
+                    <Label htmlFor="variety">Giống</Label>
                     <Input id="variety" name="variety" data-testid="input-crop-variety" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="description">Mo ta</Label>
+                  <Label htmlFor="description">Mô tả</Label>
                   <Textarea id="description" name="description" data-testid="input-crop-description" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="growthDuration">Thoi gian sinh truong (ngay)</Label>
+                    <Label htmlFor="growthDuration">Thời gian sinh trưởng (ngày)</Label>
                     <Input id="growthDuration" name="growthDuration" type="number" data-testid="input-crop-growth" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="optimalTemp">Nhiet do ly tuong</Label>
+                    <Label htmlFor="optimalTemp">Nhiệt độ lý tưởng</Label>
                     <Input id="optimalTemp" name="optimalTemp" placeholder="25-32" data-testid="input-crop-temp" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="optimalHumidity">Do am ly tuong</Label>
+                    <Label htmlFor="optimalHumidity">Độ ẩm lý tưởng</Label>
                     <Input id="optimalHumidity" name="optimalHumidity" placeholder="70-85" data-testid="input-crop-humidity" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="optimalPh">pH ly tuong</Label>
+                    <Label htmlFor="optimalPh">pH lý tưởng</Label>
                     <Input id="optimalPh" name="optimalPh" placeholder="5.5-7.0" data-testid="input-crop-ph" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="careInstructions">Huong dan cham soc</Label>
+                  <Label htmlFor="careInstructions">Hướng dẫn chăm sóc</Label>
                   <Textarea id="careInstructions" name="careInstructions" data-testid="input-crop-care" />
                 </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-crop">
-                  {createMutation.isPending ? "Dang luu..." : "Luu"}
+                  {createMutation.isPending ? "Đang lưu..." : "Lưu"}
                 </Button>
               </form>
             </DialogContent>
@@ -121,7 +123,7 @@ export default function Crops() {
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Tim kiem cay trong..."
+            placeholder="Tìm kiếm cây trồng..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -157,12 +159,12 @@ export default function Crops() {
                   <div className="flex gap-2 flex-wrap">
                     {crop.growthDuration && (
                       <Badge variant="outline" className="no-default-active-elevate text-xs">
-                        {crop.growthDuration} ngay
+                        {crop.growthDuration} ngày
                       </Badge>
                     )}
                     {crop.optimalTemp && (
                       <Badge variant="outline" className="no-default-active-elevate text-xs">
-                        <Thermometer className="mr-1 h-3 w-3" /> {crop.optimalTemp}C
+                        <Thermometer className="mr-1 h-3 w-3" /> {crop.optimalTemp}°C
                       </Badge>
                     )}
                     {crop.optimalHumidity && (
@@ -183,7 +185,7 @@ export default function Crops() {
         ) : (
           <div className="text-center py-16">
             <Sprout className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">Chua co cay trong nao</p>
+            <p className="text-muted-foreground">Chưa có cây trồng nào</p>
           </div>
         )}
       </div>

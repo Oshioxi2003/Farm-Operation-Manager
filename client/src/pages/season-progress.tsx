@@ -11,9 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import type { Season, Crop, Task } from "@shared/schema";
 
 const stages = [
-  { key: "planting", label: "Gieo trong", icon: Sprout, color: "text-chart-2" },
-  { key: "caring", label: "Cham bon", icon: Leaf, color: "text-chart-1" },
-  { key: "harvesting", label: "Thu hoach", icon: Sun, color: "text-chart-3" },
+  { key: "planting", label: "Gieo trồng", icon: Sprout, color: "text-chart-2" },
+  { key: "caring", label: "Chăm bón", icon: Leaf, color: "text-chart-1" },
+  { key: "harvesting", label: "Thu hoạch", icon: Sun, color: "text-chart-3" },
 ];
 
 const stageIndex: Record<string, number> = { planting: 0, caring: 1, harvesting: 2 };
@@ -31,7 +31,7 @@ export default function SeasonProgress() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
-      toast({ title: "Cap nhat thanh cong" });
+      toast({ title: "Cập nhật thành công" });
     },
   });
 
@@ -52,8 +52,8 @@ export default function SeasonProgress() {
     <ScrollArea className="h-full">
       <div className="p-4 md:p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Tien do giai doan</h1>
-          <p className="text-sm text-muted-foreground mt-1">Theo doi tien do cac mua vu dang hoat dong</p>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">Tiến độ giai đoạn</h1>
+          <p className="text-sm text-muted-foreground mt-1">Theo dõi tiến độ các mùa vụ đang hoạt động</p>
         </div>
 
         {isLoading ? (
@@ -96,11 +96,10 @@ export default function SeasonProgress() {
                             {i > 0 && (
                               <div className={`absolute top-5 -left-1/2 w-full h-0.5 ${isCompleted || isCurrent ? "bg-primary" : "bg-muted"}`} />
                             )}
-                            <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 ${
-                              isCompleted ? "bg-primary border-primary text-primary-foreground" :
-                              isCurrent ? "border-primary bg-background text-primary" :
-                              "border-muted bg-background text-muted-foreground"
-                            }`}>
+                            <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 ${isCompleted ? "bg-primary border-primary text-primary-foreground" :
+                                isCurrent ? "border-primary bg-background text-primary" :
+                                  "border-muted bg-background text-muted-foreground"
+                              }`}>
                               {isCompleted ? <CheckCircle2 className="h-5 w-5" /> : <stage.icon className="h-5 w-5" />}
                             </div>
                             <p className={`text-xs font-medium mt-2 ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>
@@ -108,7 +107,7 @@ export default function SeasonProgress() {
                             </p>
                             {stageTasks.length > 0 && (
                               <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {doneTasks}/{stageTasks.length} viec
+                                {doneTasks}/{stageTasks.length} việc
                               </p>
                             )}
                           </div>
@@ -118,7 +117,7 @@ export default function SeasonProgress() {
 
                     <div className="space-y-2">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Cong viec giai doan hien tai
+                        Công việc giai đoạn hiện tại
                       </p>
                       {seasonTasks.filter(t => t.stage === season.currentStage).length > 0 ? (
                         <div className="space-y-1.5">
@@ -131,13 +130,13 @@ export default function SeasonProgress() {
                               )}
                               <span className={task.status === "done" ? "line-through text-muted-foreground" : ""}>{task.title}</span>
                               {task.status === "overdue" && (
-                                <Badge variant="destructive" className="ml-auto text-[10px] no-default-active-elevate">Qua han</Badge>
+                                <Badge variant="destructive" className="ml-auto text-[10px] no-default-active-elevate">Quá hạn</Badge>
                               )}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">Chua co cong viec cho giai doan nay</p>
+                        <p className="text-sm text-muted-foreground">Chưa có công việc cho giai đoạn này</p>
                       )}
                     </div>
 
@@ -149,9 +148,9 @@ export default function SeasonProgress() {
                       data-testid={`button-advance-${season.id}`}
                     >
                       {currentIdx < 2 ? (
-                        <>Chuyen sang {stages[currentIdx + 1].label} <ArrowRight className="ml-1 h-3 w-3" /></>
+                        <>Chuyển sang {stages[currentIdx + 1].label} <ArrowRight className="ml-1 h-3 w-3" /></>
                       ) : (
-                        <>Hoan thanh mua vu <CheckCircle2 className="ml-1 h-3 w-3" /></>
+                        <>Hoàn thành mùa vụ <CheckCircle2 className="ml-1 h-3 w-3" /></>
                       )}
                     </Button>
                   </CardContent>
@@ -162,7 +161,7 @@ export default function SeasonProgress() {
         ) : (
           <div className="text-center py-16">
             <Sprout className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">Khong co mua vu dang hoat dong</p>
+            <p className="text-muted-foreground">Không có mùa vụ đang hoạt động</p>
           </div>
         )}
       </div>

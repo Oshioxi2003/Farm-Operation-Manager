@@ -16,12 +16,13 @@ import { Plus, CalendarDays, Sprout, Leaf, Sun } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Season, Crop } from "@shared/schema";
+import type { Season, Crop, User } from "@shared/schema";
+import { useAuth } from "@/lib/auth-context";
 
 const statusLabels: Record<string, string> = {
-  planning: "Ke hoach",
-  active: "Dang chay",
-  completed: "Hoan thanh",
+  planning: "Kế hoạch",
+  active: "Đang chạy",
+  completed: "Hoàn thành",
 };
 
 const statusBadgeVariant: Record<string, "default" | "secondary" | "outline"> = {
@@ -31,9 +32,9 @@ const statusBadgeVariant: Record<string, "default" | "secondary" | "outline"> = 
 };
 
 const stageLabels: Record<string, string> = {
-  planting: "Gieo trong",
-  caring: "Cham bon",
-  harvesting: "Thu hoach",
+  planting: "Gieo trồng",
+  caring: "Chăm bón",
+  harvesting: "Thu hoạch",
 };
 
 const stageIcons: Record<string, typeof Sprout> = {
@@ -45,6 +46,7 @@ const stageIcons: Record<string, typeof Sprout> = {
 export default function Seasons() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { isManager } = useAuth();
 
   const { data: seasons, isLoading } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: crops } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
@@ -57,7 +59,7 @@ export default function Seasons() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
       setOpen(false);
-      toast({ title: "Thanh cong", description: "Da tao mua vu moi" });
+      toast({ title: "Thành công", description: "Đã tạo mùa vụ mới" });
     },
   });
 
@@ -83,27 +85,27 @@ export default function Seasons() {
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Mua vu</h1>
-            <p className="text-sm text-muted-foreground mt-1">Quan ly cac mua vu gieo trong</p>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Mùa vụ</h1>
+            <p className="text-sm text-muted-foreground mt-1">Quản lý các mùa vụ gieo trồng</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-season"><Plus className="mr-1 h-4 w-4" /> Tao mua vu</Button>
-            </DialogTrigger>
+            {isManager && <DialogTrigger asChild>
+              <Button data-testid="button-add-season"><Plus className="mr-1 h-4 w-4" /> Tạo mùa vụ</Button>
+            </DialogTrigger>}
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Tao mua vu moi</DialogTitle>
+                <DialogTitle>Tạo mùa vụ mới</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="name">Ten mua vu *</Label>
+                  <Label htmlFor="name">Tên mùa vụ *</Label>
                   <Input id="name" name="name" required data-testid="input-season-name" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="cropId">Cay trong</Label>
+                  <Label htmlFor="cropId">Cây trồng</Label>
                   <Select name="cropId">
                     <SelectTrigger data-testid="select-season-crop">
-                      <SelectValue placeholder="Chon cay trong" />
+                      <SelectValue placeholder="Chọn cây trồng" />
                     </SelectTrigger>
                     <SelectContent>
                       {crops?.map(c => (
@@ -114,24 +116,24 @@ export default function Seasons() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="startDate">Ngay bat dau</Label>
+                    <Label htmlFor="startDate">Ngày bắt đầu</Label>
                     <Input id="startDate" name="startDate" type="date" data-testid="input-season-start" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="endDate">Ngay ket thuc</Label>
+                    <Label htmlFor="endDate">Ngày kết thúc</Label>
                     <Input id="endDate" name="endDate" type="date" data-testid="input-season-end" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="area">Dien tich (ha)</Label>
+                  <Label htmlFor="area">Diện tích (ha)</Label>
                   <Input id="area" name="area" type="number" step="0.1" data-testid="input-season-area" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="notes">Ghi chu</Label>
+                  <Label htmlFor="notes">Ghi chú</Label>
                   <Textarea id="notes" name="notes" data-testid="input-season-notes" />
                 </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-season">
-                  {createMutation.isPending ? "Dang luu..." : "Tao mua vu"}
+                  {createMutation.isPending ? "Đang lưu..." : "Tạo mùa vụ"}
                 </Button>
               </form>
             </DialogContent>
@@ -176,16 +178,16 @@ export default function Seasons() {
 
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Tien do</span>
+                            <span>Tiến độ</span>
                             <span>{season.progress || 0}%</span>
                           </div>
                           <Progress value={season.progress || 0} className="h-2" />
                         </div>
 
                         <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
-                          {season.startDate && <span>Bat dau: {season.startDate}</span>}
-                          {season.endDate && <span>Ket thuc: {season.endDate}</span>}
-                          {season.area && <span>Dien tich: {season.area} {season.areaUnit}</span>}
+                          {season.startDate && <span>Bắt đầu: {String(season.startDate)}</span>}
+                          {season.endDate && <span>Kết thúc: {String(season.endDate)}</span>}
+                          {season.area && <span>Diện tích: {season.area} {season.areaUnit}</span>}
                         </div>
 
                         {season.notes && (
@@ -201,7 +203,7 @@ export default function Seasons() {
         ) : (
           <div className="text-center py-16">
             <CalendarDays className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">Chua co mua vu nao</p>
+            <p className="text-muted-foreground">Chưa có mùa vụ nào</p>
           </div>
         )}
       </div>

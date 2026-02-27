@@ -23,24 +23,26 @@ import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Task, Season, User } from "@shared/schema";
+import { useAuth } from "@/lib/auth-context";
 
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  todo: { label: "Cho lam", color: "bg-muted/50 text-muted-foreground", icon: Clock },
-  doing: { label: "Dang lam", color: "bg-chart-1/15 text-chart-1", icon: Play },
-  done: { label: "Hoan thanh", color: "bg-chart-2/15 text-chart-2", icon: CheckCircle2 },
-  overdue: { label: "Qua han", color: "bg-destructive/15 text-destructive", icon: AlertTriangle },
+  todo: { label: "Chờ làm", color: "bg-muted/50 text-muted-foreground", icon: Clock },
+  doing: { label: "Đang làm", color: "bg-chart-1/15 text-chart-1", icon: Play },
+  done: { label: "Hoàn thành", color: "bg-chart-2/15 text-chart-2", icon: CheckCircle2 },
+  overdue: { label: "Quá hạn", color: "bg-destructive/15 text-destructive", icon: AlertTriangle },
 };
 
 const priorityConfig: Record<string, { label: string; color: string }> = {
   high: { label: "Cao", color: "bg-destructive/15 text-destructive" },
   medium: { label: "TB", color: "bg-chart-3/15 text-chart-3" },
-  low: { label: "Thap", color: "bg-muted text-muted-foreground" },
+  low: { label: "Thấp", color: "bg-muted text-muted-foreground" },
 };
 
 export default function Tasks() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("all");
   const { toast } = useToast();
+  const { isManager } = useAuth();
 
   const { data: tasks, isLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: seasons } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
@@ -56,7 +58,7 @@ export default function Tasks() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setOpen(false);
-      toast({ title: "Thanh cong", description: "Da tao cong viec moi" });
+      toast({ title: "Thành công", description: "Đã tạo công việc mới" });
     },
   });
 
@@ -69,7 +71,7 @@ export default function Tasks() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({ title: "Cap nhat thanh cong" });
+      toast({ title: "Cập nhật thành công" });
     },
   });
 
@@ -103,40 +105,40 @@ export default function Tasks() {
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Cong viec</h1>
-            <p className="text-sm text-muted-foreground mt-1">Quan ly va phan cong cong viec</p>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Công việc</h1>
+            <p className="text-sm text-muted-foreground mt-1">Quản lý và phân công công việc</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-task"><Plus className="mr-1 h-4 w-4" /> Them viec</Button>
-            </DialogTrigger>
+            {isManager && <DialogTrigger asChild>
+              <Button data-testid="button-add-task"><Plus className="mr-1 h-4 w-4" /> Thêm việc</Button>
+            </DialogTrigger>}
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Them cong viec moi</DialogTitle>
+                <DialogTitle>Thêm công việc mới</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="title">Tieu de *</Label>
+                  <Label htmlFor="title">Tiêu đề *</Label>
                   <Input id="title" name="title" required data-testid="input-task-title" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="description">Mo ta</Label>
+                  <Label htmlFor="description">Mô tả</Label>
                   <Textarea id="description" name="description" data-testid="input-task-description" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Mua vu</Label>
+                    <Label>Mùa vụ</Label>
                     <Select name="seasonId">
-                      <SelectTrigger data-testid="select-task-season"><SelectValue placeholder="Chon" /></SelectTrigger>
+                      <SelectTrigger data-testid="select-task-season"><SelectValue placeholder="Chọn" /></SelectTrigger>
                       <SelectContent>
                         {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Phan cong</Label>
+                    <Label>Phân công</Label>
                     <Select name="assigneeId">
-                      <SelectTrigger data-testid="select-task-assignee"><SelectValue placeholder="Chon" /></SelectTrigger>
+                      <SelectTrigger data-testid="select-task-assignee"><SelectValue placeholder="Chọn" /></SelectTrigger>
                       <SelectContent>
                         {users?.map(u => <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>)}
                       </SelectContent>
@@ -145,34 +147,34 @@ export default function Tasks() {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Uu tien</Label>
+                    <Label>Ưu tiên</Label>
                     <Select name="priority" defaultValue="medium">
                       <SelectTrigger data-testid="select-task-priority"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="low">Thap</SelectItem>
-                        <SelectItem value="medium">Trung binh</SelectItem>
+                        <SelectItem value="low">Thấp</SelectItem>
+                        <SelectItem value="medium">Trung bình</SelectItem>
                         <SelectItem value="high">Cao</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Giai doan</Label>
+                    <Label>Giai đoạn</Label>
                     <Select name="stage">
-                      <SelectTrigger data-testid="select-task-stage"><SelectValue placeholder="Chon" /></SelectTrigger>
+                      <SelectTrigger data-testid="select-task-stage"><SelectValue placeholder="Chọn" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="planting">Gieo trong</SelectItem>
-                        <SelectItem value="caring">Cham bon</SelectItem>
-                        <SelectItem value="harvesting">Thu hoach</SelectItem>
+                        <SelectItem value="planting">Gieo trồng</SelectItem>
+                        <SelectItem value="caring">Chăm bón</SelectItem>
+                        <SelectItem value="harvesting">Thu hoạch</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="dueDate">Han</Label>
+                    <Label htmlFor="dueDate">Hạn</Label>
                     <Input id="dueDate" name="dueDate" type="date" data-testid="input-task-due" />
                   </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-task">
-                  {createMutation.isPending ? "Dang luu..." : "Tao cong viec"}
+                  {createMutation.isPending ? "Đang lưu..." : "Tạo công việc"}
                 </Button>
               </form>
             </DialogContent>
@@ -181,11 +183,11 @@ export default function Tasks() {
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList data-testid="tabs-task-status">
-            <TabsTrigger value="all">Tat ca ({counts.all})</TabsTrigger>
-            <TabsTrigger value="todo">Cho lam ({counts.todo})</TabsTrigger>
-            <TabsTrigger value="doing">Dang lam ({counts.doing})</TabsTrigger>
+            <TabsTrigger value="all">Tất cả ({counts.all})</TabsTrigger>
+            <TabsTrigger value="todo">Chờ làm ({counts.todo})</TabsTrigger>
+            <TabsTrigger value="doing">Đang làm ({counts.doing})</TabsTrigger>
             <TabsTrigger value="done">Xong ({counts.done})</TabsTrigger>
-            <TabsTrigger value="overdue">Qua han ({counts.overdue})</TabsTrigger>
+            <TabsTrigger value="overdue">Quá hạn ({counts.overdue})</TabsTrigger>
           </TabsList>
 
           <TabsContent value={tab} className="mt-4">
@@ -219,7 +221,7 @@ export default function Tasks() {
                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
                               {assignee && <span>{assignee.fullName}</span>}
                               {season && <span>{season.name}</span>}
-                              {task.dueDate && <span>Han: {task.dueDate}</span>}
+                              {task.dueDate && <span>Hạn: {String(task.dueDate)}</span>}
                             </div>
                           </div>
                           <DropdownMenu>
@@ -231,17 +233,17 @@ export default function Tasks() {
                             <DropdownMenuContent align="end">
                               {task.status !== "doing" && (
                                 <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "doing" } })}>
-                                  Bat dau lam
+                                  Bắt đầu làm
                                 </DropdownMenuItem>
                               )}
                               {task.status !== "done" && (
                                 <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "done" } })}>
-                                  Danh dau hoan thanh
+                                  Đánh dấu hoàn thành
                                 </DropdownMenuItem>
                               )}
                               {task.status === "done" && (
                                 <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "todo" } })}>
-                                  Mo lai
+                                  Mở lại
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -255,7 +257,7 @@ export default function Tasks() {
             ) : (
               <div className="text-center py-16">
                 <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-                <p className="text-muted-foreground">Khong co cong viec</p>
+                <p className="text-muted-foreground">Không có công việc</p>
               </div>
             )}
           </TabsContent>

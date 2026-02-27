@@ -5,11 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Bell, CheckCheck, AlertTriangle } from "lucide-react";
+import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Alert } from "@shared/schema";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Crops from "@/pages/crops";
@@ -56,7 +58,7 @@ function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between gap-1 p-3 border-b">
-          <p className="text-sm font-semibold">Thong bao ({count})</p>
+          <p className="text-sm font-semibold">Thông báo ({count})</p>
           {count > 0 && (
             <Button
               variant="ghost"
@@ -65,7 +67,7 @@ function NotificationBell() {
               disabled={markAllRead.isPending}
               data-testid="button-mark-all-read"
             >
-              <CheckCheck className="mr-1 h-3 w-3" /> Doc tat ca
+              <CheckCheck className="mr-1 h-3 w-3" /> Đọc tất cả
             </Button>
           )}
         </div>
@@ -85,7 +87,7 @@ function NotificationBell() {
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground text-sm">
-              Khong co thong bao moi
+              Không có thông báo mới
             </div>
           )}
         </ScrollArea>
@@ -95,6 +97,8 @@ function NotificationBell() {
 }
 
 function Router() {
+  const { isManager } = useAuth();
+
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -105,7 +109,7 @@ function Router() {
       <Route path="/work-logs" component={WorkLogs} />
       <Route path="/supplies" component={Supplies} />
       <Route path="/climate" component={Climate} />
-      <Route path="/users" component={UsersPage} />
+      {isManager && <Route path="/users" component={UsersPage} />}
       <Route component={NotFound} />
     </Switch>
   );
@@ -116,24 +120,48 @@ const sidebarStyle = {
   "--sidebar-width-icon": "3rem",
 };
 
+function AuthenticatedApp() {
+  return (
+    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="flex items-center justify-between gap-1 p-2 border-b h-12 shrink-0">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <NotificationBell />
+          </header>
+          <main className="flex-1 overflow-hidden">
+            <Router />
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function AppContent() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return <Login />;
+
+  return <AuthenticatedApp />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-          <div className="flex h-screen w-full">
-            <AppSidebar />
-            <div className="flex flex-col flex-1 min-w-0">
-              <header className="flex items-center justify-between gap-1 p-2 border-b h-12 shrink-0">
-                <SidebarTrigger data-testid="button-sidebar-toggle" />
-                <NotificationBell />
-              </header>
-              <main className="flex-1 overflow-hidden">
-                <Router />
-              </main>
-            </div>
-          </div>
-        </SidebarProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

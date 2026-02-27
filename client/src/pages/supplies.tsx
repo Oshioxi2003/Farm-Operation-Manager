@@ -21,11 +21,12 @@ import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Supply, SupplyTransaction, Season } from "@shared/schema";
+import { useAuth } from "@/lib/auth-context";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  ok: { label: "Du", color: "bg-chart-2/15 text-chart-2" },
-  low: { label: "Sap het", color: "bg-chart-3/15 text-chart-3" },
-  out: { label: "Het", color: "bg-destructive/15 text-destructive" },
+  ok: { label: "Đủ", color: "bg-chart-2/15 text-chart-2" },
+  low: { label: "Sắp hết", color: "bg-chart-3/15 text-chart-3" },
+  out: { label: "Hết", color: "bg-destructive/15 text-destructive" },
 };
 
 export default function Supplies() {
@@ -34,6 +35,7 @@ export default function Supplies() {
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const { toast } = useToast();
+  const { isManager } = useAuth();
 
   const { data: supplies, isLoading } = useQuery<Supply[]>({ queryKey: ["/api/supplies"] });
   const { data: transactions } = useQuery<SupplyTransaction[]>({ queryKey: ["/api/supply-transactions"] });
@@ -48,7 +50,7 @@ export default function Supplies() {
       queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setOpenAdd(false);
-      toast({ title: "Thanh cong", description: "Da them vat tu" });
+      toast({ title: "Thành công", description: "Đã thêm vật tư" });
     },
   });
 
@@ -62,7 +64,7 @@ export default function Supplies() {
       queryClient.invalidateQueries({ queryKey: ["/api/supply-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setOpenTx(false);
-      toast({ title: "Thanh cong", description: "Da cap nhat kho" });
+      toast({ title: "Thành công", description: "Đã cập nhật kho" });
     },
   });
 
@@ -103,23 +105,23 @@ export default function Supplies() {
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-page-title">Kho vat tu</h1>
-            <p className="text-sm text-muted-foreground mt-1">Quan ly vat tu va theo doi ton kho</p>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Kho vật tư</h1>
+            <p className="text-sm text-muted-foreground mt-1">Quản lý vật tư và theo dõi tồn kho</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             <Dialog open={openTx} onOpenChange={setOpenTx}>
-              <DialogTrigger asChild>
+              {isManager && <DialogTrigger asChild>
                 <Button variant="outline" data-testid="button-add-transaction">
-                  <PackagePlus className="mr-1 h-4 w-4" /> Nhap/Xuat kho
+                  <PackagePlus className="mr-1 h-4 w-4" /> Nhập/Xuất kho
                 </Button>
-              </DialogTrigger>
+              </DialogTrigger>}
               <DialogContent>
-                <DialogHeader><DialogTitle>Nhap/Xuat kho</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>Nhập/Xuất kho</DialogTitle></DialogHeader>
                 <form onSubmit={handleTxSubmit} className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label>Vat tu *</Label>
+                    <Label>Vật tư *</Label>
                     <Select name="supplyId" required>
-                      <SelectTrigger data-testid="select-tx-supply"><SelectValue placeholder="Chon vat tu" /></SelectTrigger>
+                      <SelectTrigger data-testid="select-tx-supply"><SelectValue placeholder="Chọn vật tư" /></SelectTrigger>
                       <SelectContent>
                         {supplies?.map(s => <SelectItem key={s.id} value={s.id}>{s.name} ({s.currentStock} {s.unit})</SelectItem>)}
                       </SelectContent>
@@ -127,72 +129,72 @@ export default function Supplies() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label>Loai</Label>
+                      <Label>Loại</Label>
                       <Select name="type" defaultValue="import">
                         <SelectTrigger data-testid="select-tx-type"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="import">Nhap kho</SelectItem>
-                          <SelectItem value="export">Xuat kho</SelectItem>
+                          <SelectItem value="import">Nhập kho</SelectItem>
+                          <SelectItem value="export">Xuất kho</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="quantity">So luong *</Label>
+                      <Label htmlFor="quantity">Số lượng *</Label>
                       <Input id="quantity" name="quantity" type="number" step="0.1" required data-testid="input-tx-quantity" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Mua vu (neu co)</Label>
+                    <Label>Mùa vụ (nếu có)</Label>
                     <Select name="seasonId">
-                      <SelectTrigger data-testid="select-tx-season"><SelectValue placeholder="Chon" /></SelectTrigger>
+                      <SelectTrigger data-testid="select-tx-season"><SelectValue placeholder="Chọn" /></SelectTrigger>
                       <SelectContent>
                         {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="note">Ghi chu</Label>
+                    <Label htmlFor="note">Ghi chú</Label>
                     <Input id="note" name="note" data-testid="input-tx-note" />
                   </div>
                   <Button type="submit" className="w-full" disabled={txMutation.isPending} data-testid="button-submit-tx">
-                    {txMutation.isPending ? "Dang xu ly..." : "Xac nhan"}
+                    {txMutation.isPending ? "Đang xử lý..." : "Xác nhận"}
                   </Button>
                 </form>
               </DialogContent>
             </Dialog>
             <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-supply"><Plus className="mr-1 h-4 w-4" /> Them vat tu</Button>
-              </DialogTrigger>
+              {isManager && <DialogTrigger asChild>
+                <Button data-testid="button-add-supply"><Plus className="mr-1 h-4 w-4" /> Thêm vật tư</Button>
+              </DialogTrigger>}
               <DialogContent>
-                <DialogHeader><DialogTitle>Them vat tu moi</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>Thêm vật tư mới</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="name">Ten *</Label>
+                      <Label htmlFor="name">Tên *</Label>
                       <Input id="name" name="name" required data-testid="input-supply-name" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="category">Phan loai</Label>
+                      <Label htmlFor="category">Phân loại</Label>
                       <Input id="category" name="category" data-testid="input-supply-category" />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="unit">Don vi *</Label>
-                      <Input id="unit" name="unit" required placeholder="kg, goi, lit" data-testid="input-supply-unit" />
+                      <Label htmlFor="unit">Đơn vị *</Label>
+                      <Input id="unit" name="unit" required placeholder="kg, gói, lít" data-testid="input-supply-unit" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="currentStock">Ton kho</Label>
+                      <Label htmlFor="currentStock">Tồn kho</Label>
                       <Input id="currentStock" name="currentStock" type="number" step="0.1" defaultValue="0" data-testid="input-supply-stock" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="minThreshold">Nguong thap</Label>
+                      <Label htmlFor="minThreshold">Ngưỡng thấp</Label>
                       <Input id="minThreshold" name="minThreshold" type="number" step="0.1" defaultValue="0" data-testid="input-supply-threshold" />
                     </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-supply">
-                    {createMutation.isPending ? "Dang luu..." : "Them vat tu"}
+                    {createMutation.isPending ? "Đang lưu..." : "Thêm vật tư"}
                   </Button>
                 </form>
               </DialogContent>
@@ -204,7 +206,7 @@ export default function Supplies() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Tim kiem vat tu..."
+              placeholder="Tìm kiếm vật tư..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -217,7 +219,7 @@ export default function Supplies() {
               onCheckedChange={setLowOnly}
               data-testid="switch-low-stock"
             />
-            <Label className="text-sm cursor-pointer" onClick={() => setLowOnly(!lowOnly)}>Chi hien sap het</Label>
+            <Label className="text-sm cursor-pointer" onClick={() => setLowOnly(!lowOnly)}>Chỉ hiện sắp hết</Label>
           </div>
         </div>
 
@@ -230,11 +232,11 @@ export default function Supplies() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Ten vat tu</TableHead>
-                      <TableHead>Phan loai</TableHead>
-                      <TableHead className="text-right">Ton kho</TableHead>
-                      <TableHead className="text-right">Nguong</TableHead>
-                      <TableHead>Trang thai</TableHead>
+                      <TableHead>Tên vật tư</TableHead>
+                      <TableHead>Phân loại</TableHead>
+                      <TableHead className="text-right">Tồn kho</TableHead>
+                      <TableHead className="text-right">Ngưỡng</TableHead>
+                      <TableHead>Trạng thái</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -265,13 +267,13 @@ export default function Supplies() {
         ) : (
           <div className="text-center py-16">
             <Warehouse className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">Khong co vat tu nao</p>
+            <p className="text-muted-foreground">Không có vật tư nào</p>
           </div>
         )}
 
         {transactions && transactions.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-lg font-semibold">Lich su nhap/xuat kho</h2>
+            <h2 className="text-lg font-semibold">Lịch sử nhập/xuất kho</h2>
             <div className="space-y-2">
               {transactions.slice(0, 10).map((tx) => {
                 const supply = supplies?.find(s => s.id === tx.supplyId);
@@ -289,7 +291,7 @@ export default function Supplies() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">
-                            {tx.type === "import" ? "Nhap" : "Xuat"} {tx.quantity} {supply?.unit} - {supply?.name}
+                            {tx.type === "import" ? "Nhập" : "Xuất"} {tx.quantity} {supply?.unit} - {supply?.name}
                           </p>
                           <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
                             {tx.note && <span>{tx.note}</span>}

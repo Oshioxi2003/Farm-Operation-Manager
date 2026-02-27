@@ -92,6 +92,8 @@ export const climateReadings = mysqlTable("climate_readings", {
   lightIntensity: float("light_intensity"),
   soilMoisture: float("soil_moisture"),
   soilPh: float("soil_ph"),
+  windSpeed: float("wind_speed"),
+  location: varchar("location", { length: 100 }),
   recordedAt: timestamp("recorded_at").defaultNow(),
 });
 
