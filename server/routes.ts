@@ -322,7 +322,7 @@ export async function registerRoutes(
         }
       }
 
-      if (newCount > 0) console.log(`Synced ${newCount} weather readings to database`);
+
 
       const current = weather.current;
       if (current.temperature != null && current.temperature > 38) {
@@ -333,8 +333,7 @@ export async function registerRoutes(
       }
 
       res.json(weather);
-    } catch (error) {
-      console.error("Weather API error:", error);
+    } catch {
       res.status(500).json({ message: "Không thể lấy dữ liệu thời tiết" });
     }
   });

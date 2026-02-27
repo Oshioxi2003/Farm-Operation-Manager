@@ -104,11 +104,11 @@ export default function Login() {
               <button
                 type="button"
                 className="rounded-md border p-2 text-left hover:bg-muted transition-colors"
-                onClick={() => { setUsername("farmer1"); setPassword("123456"); }}
+                onClick={() => { setUsername("farmer1"); setPassword("farmer123"); }}
                 data-testid="button-demo-farmer"
               >
                 <p className="font-medium">👨‍🌾 Nông dân</p>
-                <p className="text-muted-foreground">farmer1 / 123456</p>
+                <p className="text-muted-foreground">farmer1 / farmer123</p>
               </button>
             </div>
           </div>

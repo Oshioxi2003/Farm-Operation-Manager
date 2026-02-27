@@ -171,5 +171,5 @@ export async function seedDatabase() {
     { type: "stage_change", severity: "info", title: "Chuyển giai đoạn", message: "Rau cải quý 1 đã chuyển sang giai đoạn thu hoạch. Dự kiến hoàn thành 20/02.", isRead: true },
   ]);
 
-  console.log("Seed data inserted successfully!");
+
 }
