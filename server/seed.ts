@@ -6,14 +6,14 @@ export async function seedDatabase() {
   const existingUsers = await db.select().from(users);
   if (existingUsers.length > 0) return;
 
-  const [manager] = await db.insert(users).values([
+  await db.insert(users).values([
     { username: "admin", password: "admin123", fullName: "Nguyen Van Minh", role: "manager", phone: "0901234567" },
     { username: "farmer1", password: "farmer123", fullName: "Tran Thi Lan", role: "farmer", phone: "0912345678" },
     { username: "farmer2", password: "farmer123", fullName: "Le Van Hung", role: "farmer", phone: "0923456789" },
     { username: "farmer3", password: "farmer123", fullName: "Pham Thi Mai", role: "farmer", phone: "0934567890" },
-  ]).returning();
+  ]);
 
-  const [lua, caPhao, rauCai, dauPhong] = await db.insert(crops).values([
+  await db.insert(crops).values([
     {
       name: "Lua nuoc",
       variety: "IR50404",
@@ -54,14 +54,20 @@ export async function seedDatabase() {
       optimalPh: "5.5-6.5",
       careInstructions: "Lam dat ky, be luong. Trong khoang cach 30x15cm. Vun goc khi cay ra hoa.",
     },
-  ]).returning();
+  ]);
 
+  // Query back inserted data (MySQL doesn't support .returning())
   const allFarmers = await db.select().from(users);
   const farmer1 = allFarmers.find(u => u.username === "farmer1")!;
   const farmer2 = allFarmers.find(u => u.username === "farmer2")!;
   const farmer3 = allFarmers.find(u => u.username === "farmer3")!;
 
-  const [season1, season2, season3] = await db.insert(seasons).values([
+  const allCrops = await db.select().from(crops);
+  const lua = allCrops.find(c => c.name === "Lua nuoc")!;
+  const caPhao = allCrops.find(c => c.name === "Ca phao")!;
+  const rauCai = allCrops.find(c => c.name === "Rau cai")!;
+
+  await db.insert(seasons).values([
     {
       name: "Vu Dong Xuan 2025-2026",
       cropId: lua.id,
@@ -98,7 +104,12 @@ export async function seedDatabase() {
       notes: "Thu hoach cuon chieu, ban cho dau moi",
       progress: 85,
     },
-  ]).returning();
+  ]);
+
+  const allSeasons = await db.select().from(seasons);
+  const season1 = allSeasons.find(s => s.name === "Vu Dong Xuan 2025-2026")!;
+  const season2 = allSeasons.find(s => s.name === "Vu Xuan He 2026")!;
+  const season3 = allSeasons.find(s => s.name === "Vu Rau quy 1/2026")!;
 
   const today = new Date().toISOString().split("T")[0];
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
@@ -116,13 +127,19 @@ export async function seedDatabase() {
     { title: "Ghi nhat ky cham bon", description: "Cap nhat tien do cham bon lua tuan 8", seasonId: season1.id, assigneeId: farmer1.id, status: "todo", priority: "low", stage: "caring", dueDate: tomorrow },
   ]);
 
-  const [phanUre, phanNPK, thuocTruSau, hatGiong, mang] = await db.insert(supplies).values([
+  await db.insert(supplies).values([
     { name: "Phan Ure", category: "Phan bon", unit: "kg", currentStock: 45, minThreshold: 50, status: "low" },
     { name: "Phan NPK 20-20-15", category: "Phan bon", unit: "kg", currentStock: 200, minThreshold: 100, status: "ok" },
     { name: "Regent 800WG", category: "Thuoc BVTV", unit: "goi", currentStock: 3, minThreshold: 5, status: "low" },
     { name: "Hat giong lua IR50404", category: "Hat giong", unit: "kg", currentStock: 0, minThreshold: 20, status: "out" },
     { name: "Mang phuy nong nghiep", category: "Vat tu khac", unit: "cuon", currentStock: 12, minThreshold: 5, status: "ok" },
-  ]).returning();
+  ]);
+
+  const allSupplies = await db.select().from(supplies);
+  const phanUre = allSupplies.find(s => s.name === "Phan Ure")!;
+  const phanNPK = allSupplies.find(s => s.name === "Phan NPK 20-20-15")!;
+  const thuocTruSau = allSupplies.find(s => s.name === "Regent 800WG")!;
+  const hatGiong = allSupplies.find(s => s.name === "Hat giong lua IR50404")!;
 
   await db.insert(supplyTransactions).values([
     { supplyId: phanUre.id, seasonId: season1.id, type: "export", quantity: 30, note: "Bon phan thuc lan 1 cho lua" },

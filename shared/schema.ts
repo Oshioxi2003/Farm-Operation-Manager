@@ -1,33 +1,24 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, date, real, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { mysqlTable, text, varchar, int, timestamp, date, float, boolean, mysqlEnum } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const userRoleEnum = pgEnum("user_role", ["manager", "farmer"]);
-export const seasonStatusEnum = pgEnum("season_status", ["planning", "active", "completed"]);
-export const stageEnum = pgEnum("stage", ["planting", "caring", "harvesting"]);
-export const taskStatusEnum = pgEnum("task_status", ["todo", "doing", "done", "overdue"]);
-export const taskPriorityEnum = pgEnum("task_priority", ["low", "medium", "high"]);
-export const stockStatusEnum = pgEnum("stock_status", ["ok", "low", "out"]);
-export const alertTypeEnum = pgEnum("alert_type", ["low_stock", "overdue_task", "weather", "stage_change"]);
-export const alertSeverityEnum = pgEnum("alert_severity", ["info", "warning", "critical"]);
-
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+export const users = mysqlTable("users", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+  username: text("username").notNull(),
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
-  role: userRoleEnum("role").notNull().default("farmer"),
+  role: mysqlEnum("role", ["manager", "farmer"]).notNull().default("farmer"),
   phone: text("phone"),
   avatar: text("avatar"),
 });
 
-export const crops = pgTable("crops", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const crops = mysqlTable("crops", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
   name: text("name").notNull(),
   variety: text("variety"),
   description: text("description"),
-  growthDuration: integer("growth_duration"),
+  growthDuration: int("growth_duration"),
   optimalTemp: text("optimal_temp"),
   optimalHumidity: text("optimal_humidity"),
   optimalPh: text("optimal_ph"),
@@ -35,83 +26,83 @@ export const crops = pgTable("crops", {
   image: text("image"),
 });
 
-export const seasons = pgTable("seasons", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const seasons = mysqlTable("seasons", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
   name: text("name").notNull(),
-  cropId: varchar("crop_id").references(() => crops.id),
-  status: seasonStatusEnum("status").notNull().default("planning"),
-  currentStage: stageEnum("current_stage").default("planting"),
+  cropId: varchar("crop_id", { length: 36 }).references(() => crops.id),
+  status: mysqlEnum("status", ["planning", "active", "completed"]).notNull().default("planning"),
+  currentStage: mysqlEnum("current_stage", ["planting", "caring", "harvesting"]).default("planting"),
   startDate: date("start_date"),
   endDate: date("end_date"),
-  area: real("area"),
+  area: float("area"),
   areaUnit: text("area_unit").default("ha"),
   notes: text("notes"),
-  progress: integer("progress").default(0),
+  progress: int("progress").default(0),
 });
 
-export const tasks = pgTable("tasks", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const tasks = mysqlTable("tasks", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
   title: text("title").notNull(),
   description: text("description"),
-  seasonId: varchar("season_id").references(() => seasons.id),
-  assigneeId: varchar("assignee_id").references(() => users.id),
-  status: taskStatusEnum("status").notNull().default("todo"),
-  priority: taskPriorityEnum("priority").default("medium"),
-  stage: stageEnum("stage"),
+  seasonId: varchar("season_id", { length: 36 }).references(() => seasons.id),
+  assigneeId: varchar("assignee_id", { length: 36 }).references(() => users.id),
+  status: mysqlEnum("status", ["todo", "doing", "done", "overdue"]).notNull().default("todo"),
+  priority: mysqlEnum("priority", ["low", "medium", "high"]).default("medium"),
+  stage: mysqlEnum("stage", ["planting", "caring", "harvesting"]),
   dueDate: date("due_date"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const workLogs = pgTable("work_logs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  taskId: varchar("task_id").references(() => tasks.id),
-  seasonId: varchar("season_id").references(() => seasons.id),
-  userId: varchar("user_id").references(() => users.id),
+export const workLogs = mysqlTable("work_logs", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+  taskId: varchar("task_id", { length: 36 }).references(() => tasks.id),
+  seasonId: varchar("season_id", { length: 36 }).references(() => seasons.id),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id),
   content: text("content").notNull(),
-  hoursWorked: real("hours_worked"),
+  hoursWorked: float("hours_worked"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const supplies = pgTable("supplies", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const supplies = mysqlTable("supplies", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
   name: text("name").notNull(),
   category: text("category"),
   unit: text("unit").notNull(),
-  currentStock: real("current_stock").notNull().default(0),
-  minThreshold: real("min_threshold").default(0),
-  status: stockStatusEnum("status").default("ok"),
+  currentStock: float("current_stock").notNull().default(0),
+  minThreshold: float("min_threshold").default(0),
+  status: mysqlEnum("status", ["ok", "low", "out"]).default("ok"),
 });
 
-export const supplyTransactions = pgTable("supply_transactions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  supplyId: varchar("supply_id").references(() => supplies.id),
-  seasonId: varchar("season_id").references(() => seasons.id),
+export const supplyTransactions = mysqlTable("supply_transactions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+  supplyId: varchar("supply_id", { length: 36 }).references(() => supplies.id),
+  seasonId: varchar("season_id", { length: 36 }).references(() => seasons.id),
   type: text("type").notNull(),
-  quantity: real("quantity").notNull(),
+  quantity: float("quantity").notNull(),
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const climateReadings = pgTable("climate_readings", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  temperature: real("temperature"),
-  humidity: real("humidity"),
-  rainfall: real("rainfall"),
-  lightIntensity: real("light_intensity"),
-  soilMoisture: real("soil_moisture"),
-  soilPh: real("soil_ph"),
+export const climateReadings = mysqlTable("climate_readings", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+  temperature: float("temperature"),
+  humidity: float("humidity"),
+  rainfall: float("rainfall"),
+  lightIntensity: float("light_intensity"),
+  soilMoisture: float("soil_moisture"),
+  soilPh: float("soil_ph"),
   recordedAt: timestamp("recorded_at").defaultNow(),
 });
 
-export const alerts = pgTable("alerts", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  type: alertTypeEnum("type").notNull(),
-  severity: alertSeverityEnum("severity").notNull().default("info"),
+export const alerts = mysqlTable("alerts", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+  type: mysqlEnum("type", ["low_stock", "overdue_task", "weather", "stage_change"]).notNull(),
+  severity: mysqlEnum("severity", ["info", "warning", "critical"]).notNull().default("info"),
   title: text("title").notNull(),
   message: text("message").notNull(),
   isRead: boolean("is_read").default(false),
-  relatedId: varchar("related_id"),
+  relatedId: varchar("related_id", { length: 36 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

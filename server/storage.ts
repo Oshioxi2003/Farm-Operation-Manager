@@ -12,6 +12,11 @@ import {
   type ClimateReading, type InsertClimateReading,
   type Alert, type InsertAlert,
 } from "@shared/schema";
+import crypto from "crypto";
+
+function generateId(): string {
+  return crypto.randomUUID();
+}
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -84,7 +89,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(user: InsertUser) {
-    const [created] = await db.insert(users).values(user).returning();
+    const id = generateId();
+    await db.insert(users).values({ ...user, id });
+    const [created] = await db.select().from(users).where(eq(users.id, id));
     return created;
   }
 
@@ -102,12 +109,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCrop(crop: InsertCrop) {
-    const [created] = await db.insert(crops).values(crop).returning();
+    const id = generateId();
+    await db.insert(crops).values({ ...crop, id });
+    const [created] = await db.select().from(crops).where(eq(crops.id, id));
     return created;
   }
 
   async updateCrop(id: string, crop: Partial<InsertCrop>) {
-    const [updated] = await db.update(crops).set(crop).where(eq(crops.id, id)).returning();
+    await db.update(crops).set(crop).where(eq(crops.id, id));
+    const [updated] = await db.select().from(crops).where(eq(crops.id, id));
     return updated;
   }
 
@@ -125,12 +135,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSeason(season: InsertSeason) {
-    const [created] = await db.insert(seasons).values(season).returning();
+    const id = generateId();
+    await db.insert(seasons).values({ ...season, id });
+    const [created] = await db.select().from(seasons).where(eq(seasons.id, id));
     return created;
   }
 
   async updateSeason(id: string, season: Partial<InsertSeason>) {
-    const [updated] = await db.update(seasons).set(season).where(eq(seasons.id, id)).returning();
+    await db.update(seasons).set(season).where(eq(seasons.id, id));
+    const [updated] = await db.select().from(seasons).where(eq(seasons.id, id));
     return updated;
   }
 
@@ -166,12 +179,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTask(task: InsertTask) {
-    const [created] = await db.insert(tasks).values(task).returning();
+    const id = generateId();
+    await db.insert(tasks).values({ ...task, id });
+    const [created] = await db.select().from(tasks).where(eq(tasks.id, id));
     return created;
   }
 
   async updateTask(id: string, task: Partial<InsertTask>) {
-    const [updated] = await db.update(tasks).set(task).where(eq(tasks.id, id)).returning();
+    await db.update(tasks).set(task).where(eq(tasks.id, id));
+    const [updated] = await db.select().from(tasks).where(eq(tasks.id, id));
     return updated;
   }
 
@@ -188,7 +204,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWorkLog(log: InsertWorkLog) {
-    const [created] = await db.insert(workLogs).values(log).returning();
+    const id = generateId();
+    await db.insert(workLogs).values({ ...log, id });
+    const [created] = await db.select().from(workLogs).where(eq(workLogs.id, id));
     return created;
   }
 
@@ -202,12 +220,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSupply(supply: InsertSupply) {
-    const [created] = await db.insert(supplies).values(supply).returning();
+    const id = generateId();
+    await db.insert(supplies).values({ ...supply, id });
+    const [created] = await db.select().from(supplies).where(eq(supplies.id, id));
     return created;
   }
 
   async updateSupply(id: string, supply: Partial<InsertSupply>) {
-    const [updated] = await db.update(supplies).set(supply).where(eq(supplies.id, id)).returning();
+    await db.update(supplies).set(supply).where(eq(supplies.id, id));
+    const [updated] = await db.select().from(supplies).where(eq(supplies.id, id));
     return updated;
   }
 
@@ -230,7 +251,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSupplyTransaction(tx: InsertSupplyTransaction) {
-    const [created] = await db.insert(supplyTransactions).values(tx).returning();
+    const id = generateId();
+    await db.insert(supplyTransactions).values({ ...tx, id });
+    const [created] = await db.select().from(supplyTransactions).where(eq(supplyTransactions.id, id));
     const supply = await this.getSupply(tx.supplyId!);
     if (supply) {
       const newStock = tx.type === "import"
@@ -247,7 +270,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createClimateReading(reading: InsertClimateReading) {
-    const [created] = await db.insert(climateReadings).values(reading).returning();
+    const id = generateId();
+    await db.insert(climateReadings).values({ ...reading, id });
+    const [created] = await db.select().from(climateReadings).where(eq(climateReadings.id, id));
     return created;
   }
 
@@ -260,7 +285,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAlert(alert: InsertAlert) {
-    const [created] = await db.insert(alerts).values(alert).returning();
+    const id = generateId();
+    await db.insert(alerts).values({ ...alert, id });
+    const [created] = await db.select().from(alerts).where(eq(alerts.id, id));
     return created;
   }
 
