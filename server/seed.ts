@@ -8,9 +8,9 @@ export async function seedDatabase() {
 
   await db.insert(users).values([
     { username: "admin", password: "admin123", fullName: "Nguyễn Văn Minh", role: "manager", phone: "0901234567" },
-    { username: "farmer1", password: "123456", fullName: "Trần Thị Lan", role: "farmer", phone: "0912345678" },
-    { username: "farmer2", password: "123456", fullName: "Lê Văn Hùng", role: "farmer", phone: "0923456789" },
-    { username: "farmer3", password: "123456", fullName: "Phạm Thị Mai", role: "farmer", phone: "0934567890" },
+    { username: "farmer1", password: "farmer123", fullName: "Trần Thị Lan", role: "farmer", phone: "0912345678" },
+    { username: "farmer2", password: "farmer123", fullName: "Lê Văn Hùng", role: "farmer", phone: "0923456789" },
+    { username: "farmer3", password: "farmer123", fullName: "Phạm Thị Mai", role: "farmer", phone: "0934567890" },
   ]);
 
   await db.insert(crops).values([
