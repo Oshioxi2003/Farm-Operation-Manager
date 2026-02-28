@@ -354,6 +354,7 @@ export default function Tasks() {
                   const assignee = users?.find(u => u.id === task.assigneeId);
                   const season = seasons?.find(s => s.id === task.seasonId);
                   const StatusIcon = cfg.icon;
+                  const isAssignedToMe = isFarmer && task.assigneeId === authUser?.id;
 
                   return (
                     <Card key={task.id} className="hover-elevate" data-testid={`card-task-${task.id}`}>
@@ -398,18 +399,18 @@ export default function Tasks() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {task.status !== "doing" && (
+                              {(isManager || isAssignedToMe) && task.status !== "doing" && (
                                 <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "doing" } })}>
                                   Bắt đầu làm
                                 </DropdownMenuItem>
                               )}
-                              {/* Only farmer can mark done */}
-                              {isFarmer && task.status !== "done" && (
+                              {/* Only assigned farmer can mark done */}
+                              {isAssignedToMe && task.status !== "done" && (
                                 <DropdownMenuItem onClick={() => openComplete(task.id)}>
                                   <Camera className="mr-1 h-3.5 w-3.5" /> Hoàn thành
                                 </DropdownMenuItem>
                               )}
-                              {task.status === "done" && (
+                              {(isManager || isAssignedToMe) && task.status === "done" && (
                                 <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "todo" } })}>
                                   Mở lại
                                 </DropdownMenuItem>

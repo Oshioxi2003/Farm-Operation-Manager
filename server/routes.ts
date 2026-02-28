@@ -238,7 +238,22 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/seasons/:id", requireManager, async (req, res) => {
+  // Farmer can advance stage (update currentStage, progress, status); manager can update everything
+  app.patch("/api/seasons/:id", requireAuth, async (req, res) => {
+    if (req.user!.role === "farmer") {
+      // Farmer can only update stage-related fields
+      const allowed: Record<string, unknown> = {};
+      if (req.body.currentStage) allowed.currentStage = req.body.currentStage;
+      if (req.body.progress !== undefined) allowed.progress = req.body.progress;
+      if (req.body.status) allowed.status = req.body.status;
+      if (Object.keys(allowed).length === 0) {
+        return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
+      }
+      const season = await storage.updateSeason(req.params.id, allowed as any);
+      if (!season) return res.status(404).json({ message: "Không tìm thấy" });
+      return res.json(season);
+    }
+
     const body = { ...req.body };
     if (body.startDate && typeof body.startDate === "string") body.startDate = new Date(body.startDate);
     if (body.endDate && typeof body.endDate === "string") body.endDate = new Date(body.endDate);
