@@ -1,6 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import cookieParser from "cookie-parser";
+import path from "path";
+import fs from "fs";
+import express from "express";
+import crypto from "crypto";
 import { storage } from "./storage";
 import { fetchWeatherData } from "./weather";
 import {
@@ -22,6 +26,45 @@ export async function registerRoutes(
   // ── Global middleware ──
   app.use(cookieParser());
   app.use(extractUser);
+
+  // ── Serve uploaded media files ──
+  const mediaDir = path.resolve(process.cwd(), "media");
+  app.use("/media", express.static(mediaDir));
+
+  // ── Upload endpoint for crop images ──
+  app.post("/api/upload/crops", requireManager, async (req, res) => {
+    try {
+      const { base64, filename } = req.body;
+      if (!base64) return res.status(400).json({ message: "Thiếu dữ liệu ảnh" });
+
+      // Extract data from base64 string (handle data:image/xxx;base64,...)
+      const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
+      let ext = "png";
+      let data = base64;
+      if (matches) {
+        ext = matches[1];
+        data = matches[2];
+      }
+
+      const uploadDir = path.resolve(process.cwd(), "media", "upload", "crops");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const safeName = filename
+        ? filename.replace(/[^a-zA-Z0-9._-]/g, "_")
+        : `${crypto.randomUUID()}.${ext}`;
+      const filePath = path.join(uploadDir, safeName);
+
+      fs.writeFileSync(filePath, Buffer.from(data, "base64"));
+
+      const url = `/media/upload/crops/${safeName}`;
+      res.json({ url });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      res.status(500).json({ message: "Lỗi tải ảnh lên" });
+    }
+  });
 
   // ══════════════════════════════════════════
   // AUTH ROUTES (public)

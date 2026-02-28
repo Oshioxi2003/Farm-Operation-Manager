@@ -15,32 +15,141 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Sprout, Thermometer, Droplets, Search, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Sprout, Thermometer, Droplets, Search, Pencil, Trash2, Upload, Link, ImageIcon } from "lucide-react";
+import { useState, useRef } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Crop } from "@shared/schema";
 import { useAuth } from "@/lib/auth-context";
+
+function ImageUploadField({
+  value,
+  onChange,
+  label = "Hình ảnh",
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  label?: string;
+}) {
+  const [mode, setMode] = useState<"url" | "upload">("upload");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const res = await apiRequest("POST", "/api/upload/crops", {
+          base64,
+          filename: file.name,
+        });
+        const data = await res.json();
+        onChange(data.url);
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Tabs value={mode} onValueChange={(v) => setMode(v as "url" | "upload")} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 h-8">
+          <TabsTrigger value="upload" className="text-xs h-6">
+            <Upload className="mr-1 h-3 w-3" /> Tải ảnh lên
+          </TabsTrigger>
+          <TabsTrigger value="url" className="text-xs h-6">
+            <Link className="mr-1 h-3 w-3" /> Nhập URL
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="upload" className="mt-2">
+          <div
+            className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={() => fileRef.current?.click()}
+          >
+            {value && !value.startsWith("http") ? (
+              <img src={value} alt="Preview" className="max-h-32 mx-auto rounded-md object-cover" />
+            ) : (
+              <>
+                <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
+                <p className="text-xs text-muted-foreground">
+                  {uploading ? "Đang tải lên..." : "Nhấp để chọn ảnh"}
+                </p>
+              </>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFile}
+          />
+        </TabsContent>
+        <TabsContent value="url" className="mt-2">
+          <Input
+            placeholder="https://example.com/image.jpg"
+            value={value.startsWith("/media") ? "" : value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        </TabsContent>
+      </Tabs>
+      {value && (
+        <div className="relative">
+          <img
+            src={value}
+            alt="Preview"
+            className="max-h-24 rounded-md object-cover border"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            className="absolute top-1 right-1 h-5 text-[10px] px-1.5"
+            onClick={() => onChange("")}
+          >
+            Xóa
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Crops() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editCrop, setEditCrop] = useState<Crop | null>(null);
+  const [imageUrl, setImageUrl] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState("");
   const { toast } = useToast();
   const { isManager } = useAuth();
 
   const { data: crops, isLoading } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
 
   const createMutation = useMutation({
-    mutationFn: async (data: Record<string, string>) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       const res = await apiRequest("POST", "/api/crops", data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crops"] });
       setOpen(false);
+      setImageUrl("");
       toast({ title: "Thành công", description: "Đã thêm cây trồng mới" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
     },
   });
 
@@ -53,7 +162,11 @@ export default function Crops() {
       queryClient.invalidateQueries({ queryKey: ["/api/crops"] });
       setEditOpen(false);
       setEditCrop(null);
+      setEditImageUrl("");
       toast({ title: "Thành công", description: "Đã cập nhật cây trồng" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
     },
   });
 
@@ -75,15 +188,17 @@ export default function Crops() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const gd = fd.get("growthDuration") as string;
     createMutation.mutate({
       name: fd.get("name") as string,
-      variety: fd.get("variety") as string,
-      description: fd.get("description") as string,
-      growthDuration: fd.get("growthDuration") as string,
-      optimalTemp: fd.get("optimalTemp") as string,
-      optimalHumidity: fd.get("optimalHumidity") as string,
-      optimalPh: fd.get("optimalPh") as string,
-      careInstructions: fd.get("careInstructions") as string,
+      variety: fd.get("variety") as string || null,
+      description: fd.get("description") as string || null,
+      growthDuration: gd ? parseInt(gd) : null,
+      optimalTemp: fd.get("optimalTemp") as string || null,
+      optimalHumidity: fd.get("optimalHumidity") as string || null,
+      optimalPh: fd.get("optimalPh") as string || null,
+      careInstructions: fd.get("careInstructions") as string || null,
+      image: imageUrl || null,
     });
   };
 
@@ -91,23 +206,26 @@ export default function Crops() {
     e.preventDefault();
     if (!editCrop) return;
     const fd = new FormData(e.currentTarget);
+    const gd = fd.get("growthDuration") as string;
     updateMutation.mutate({
       id: editCrop.id,
       data: {
         name: fd.get("name") as string,
-        variety: fd.get("variety") as string,
-        description: fd.get("description") as string,
-        growthDuration: parseInt(fd.get("growthDuration") as string) || null,
-        optimalTemp: fd.get("optimalTemp") as string,
-        optimalHumidity: fd.get("optimalHumidity") as string,
-        optimalPh: fd.get("optimalPh") as string,
-        careInstructions: fd.get("careInstructions") as string,
+        variety: fd.get("variety") as string || null,
+        description: fd.get("description") as string || null,
+        growthDuration: gd ? parseInt(gd) : null,
+        optimalTemp: fd.get("optimalTemp") as string || null,
+        optimalHumidity: fd.get("optimalHumidity") as string || null,
+        optimalPh: fd.get("optimalPh") as string || null,
+        careInstructions: fd.get("careInstructions") as string || null,
+        image: editImageUrl || null,
       },
     });
   };
 
   const openEdit = (crop: Crop) => {
     setEditCrop(crop);
+    setEditImageUrl(crop.image || "");
     setEditOpen(true);
   };
 
@@ -119,11 +237,11 @@ export default function Crops() {
             <h1 className="text-2xl font-bold" data-testid="text-page-title">Cây trồng</h1>
             <p className="text-sm text-muted-foreground mt-1">Quản lý danh sách cây trồng và hướng dẫn chăm sóc</p>
           </div>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setImageUrl(""); }}>
             {isManager && <DialogTrigger asChild>
               <Button data-testid="button-add-crop"><Plus className="mr-1 h-4 w-4" /> Thêm cây</Button>
             </DialogTrigger>}
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Thêm cây trồng mới</DialogTitle>
               </DialogHeader>
@@ -138,6 +256,7 @@ export default function Crops() {
                     <Input id="variety" name="variety" data-testid="input-crop-variety" />
                   </div>
                 </div>
+                <ImageUploadField value={imageUrl} onChange={setImageUrl} />
                 <div className="space-y-1.5">
                   <Label htmlFor="description">Mô tả</Label>
                   <Textarea id="description" name="description" data-testid="input-crop-description" />
@@ -194,11 +313,26 @@ export default function Crops() {
         ) : filtered && filtered.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((crop) => (
-              <Card key={crop.id} className="hover-elevate" data-testid={`card-crop-${crop.id}`}>
+              <Card key={crop.id} className="hover-elevate overflow-hidden" data-testid={`card-crop-${crop.id}`}>
+                {/* Show crop image if available */}
+                {crop.image && (
+                  <div className="aspect-video w-full overflow-hidden bg-muted">
+                    <img
+                      src={crop.image}
+                      alt={crop.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  </div>
+                )}
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-chart-2/10">
-                      <Sprout className="h-5 w-5 text-chart-2" />
+                      {crop.image ? (
+                        <ImageIcon className="h-5 w-5 text-chart-2" />
+                      ) : (
+                        <Sprout className="h-5 w-5 text-chart-2" />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <CardTitle className="text-base truncate">{crop.name}</CardTitle>
@@ -276,8 +410,8 @@ export default function Crops() {
       </div>
 
       {/* Edit crop dialog */}
-      <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) setEditCrop(null); }}>
-        <DialogContent>
+      <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) { setEditCrop(null); setEditImageUrl(""); } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chỉnh sửa cây trồng</DialogTitle>
           </DialogHeader>
@@ -293,6 +427,7 @@ export default function Crops() {
                   <Input id="edit-variety" name="variety" defaultValue={editCrop.variety || ""} />
                 </div>
               </div>
+              <ImageUploadField value={editImageUrl} onChange={setEditImageUrl} />
               <div className="space-y-1.5">
                 <Label htmlFor="edit-description">Mô tả</Label>
                 <Textarea id="edit-description" name="description" defaultValue={editCrop.description || ""} />
