@@ -2,12 +2,20 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Sprout, Leaf, Sun, CheckCircle2, Circle, ArrowRight } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Sprout, Leaf, Sun, CheckCircle2, Circle, ArrowRight, Image } from "lucide-react";
+import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth-context";
 import type { Season, Crop, Task } from "@shared/schema";
 
 const stages = [
@@ -20,6 +28,12 @@ const stageIndex: Record<string, number> = { planting: 0, caring: 1, harvesting:
 
 export default function SeasonProgress() {
   const { toast } = useToast();
+  const { isFarmer, isManager, user } = useAuth();
+  const [diaryOpen, setDiaryOpen] = useState(false);
+  const [diaryContent, setDiaryContent] = useState("");
+  const [diaryImage, setDiaryImage] = useState("");
+  const [pendingSeason, setPendingSeason] = useState<Season | null>(null);
+
   const { data: seasons, isLoading } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: crops } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
   const { data: allTasks } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -31,21 +45,63 @@ export default function SeasonProgress() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
-      toast({ title: "Cập nhật thành công" });
     },
   });
 
   const activeSeasons = seasons?.filter(s => s.status === "active" || s.status === "planning") || [];
 
-  const advanceStage = (season: Season) => {
-    const idx = season.currentStage ? stageIndex[season.currentStage] : 0;
-    if (idx < 2) {
-      const nextStage = stages[idx + 1].key as "planting" | "caring" | "harvesting";
-      const progress = Math.min(100, (season.progress || 0) + 20);
-      updateMutation.mutate({ id: season.id, data: { currentStage: nextStage, progress, status: "active" } });
-    } else {
-      updateMutation.mutate({ id: season.id, data: { status: "completed", progress: 100 } });
+  // Open diary dialog before advancing
+  const openAdvanceDialog = (season: Season) => {
+    setPendingSeason(season);
+    setDiaryContent("");
+    setDiaryImage("");
+    setDiaryOpen(true);
+  };
+
+  // Actually advance stage + create work log
+  const confirmAdvance = async () => {
+    if (!pendingSeason) return;
+    const idx = pendingSeason.currentStage ? stageIndex[pendingSeason.currentStage] : 0;
+    const currentStageName = stages[idx]?.label || pendingSeason.currentStage;
+
+    try {
+      // Advance the season stage
+      if (idx < 2) {
+        const nextStage = stages[idx + 1].key as "planting" | "caring" | "harvesting";
+        const progress = Math.min(100, (pendingSeason.progress || 0) + 20);
+        await updateMutation.mutateAsync({ id: pendingSeason.id, data: { currentStage: nextStage, progress, status: "active" } });
+      } else {
+        await updateMutation.mutateAsync({ id: pendingSeason.id, data: { status: "completed", progress: 100 } });
+      }
+
+      // Create work log diary entry
+      const logContent = diaryContent || `Hoàn thành giai đoạn: ${currentStageName} - ${pendingSeason.name}`;
+      const logData: Record<string, unknown> = {
+        content: logContent,
+        seasonId: pendingSeason.id,
+        userId: user?.id || null,
+        hoursWorked: null,
+      };
+
+      await apiRequest("POST", "/api/work-logs", logData);
+
+      // If user provided an image, create another log entry with the image reference
+      if (diaryImage.trim()) {
+        await apiRequest("POST", "/api/work-logs", {
+          content: `📷 Ảnh minh chứng giai đoạn ${currentStageName}: ${diaryImage}`,
+          seasonId: pendingSeason.id,
+          userId: user?.id || null,
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
+      toast({ title: "Thành công", description: `Đã chuyển giai đoạn và ghi nhật ký` });
+    } catch {
+      toast({ title: "Lỗi", description: "Không thể cập nhật", variant: "destructive" });
     }
+
+    setDiaryOpen(false);
+    setPendingSeason(null);
   };
 
   return (
@@ -140,19 +196,26 @@ export default function SeasonProgress() {
                       )}
                     </div>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => advanceStage(season)}
-                      disabled={updateMutation.isPending}
-                      data-testid={`button-advance-${season.id}`}
-                    >
-                      {currentIdx < 2 ? (
-                        <>Chuyển sang {stages[currentIdx + 1].label} <ArrowRight className="ml-1 h-3 w-3" /></>
-                      ) : (
-                        <>Hoàn thành mùa vụ <CheckCircle2 className="ml-1 h-3 w-3" /></>
-                      )}
-                    </Button>
+                    {/* Only farmers can advance stage */}
+                    {isFarmer ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openAdvanceDialog(season)}
+                        disabled={updateMutation.isPending}
+                        data-testid={`button-advance-${season.id}`}
+                      >
+                        {currentIdx < 2 ? (
+                          <>Chuyển sang {stages[currentIdx + 1].label} <ArrowRight className="ml-1 h-3 w-3" /></>
+                        ) : (
+                          <>Hoàn thành mùa vụ <CheckCircle2 className="ml-1 h-3 w-3" /></>
+                        )}
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        Chỉ nông dân được giao mới có thể chuyển giai đoạn
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -165,6 +228,69 @@ export default function SeasonProgress() {
           </div>
         )}
       </div>
+
+      {/* Diary entry dialog when advancing stage */}
+      <Dialog open={diaryOpen} onOpenChange={(o) => { setDiaryOpen(o); if (!o) setPendingSeason(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Ghi nhật ký giai đoạn
+              {pendingSeason && ` - ${pendingSeason.name}`}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {pendingSeason && (
+              <div className="p-3 bg-muted/30 rounded-md text-sm">
+                <p>Giai đoạn hiện tại: <strong>{stages[stageIndex[pendingSeason.currentStage || "planting"]]?.label}</strong></p>
+                <p className="text-muted-foreground">
+                  {(stageIndex[pendingSeason.currentStage || "planting"] || 0) < 2
+                    ? `→ Chuyển sang: ${stages[(stageIndex[pendingSeason.currentStage || "planting"] || 0) + 1]?.label}`
+                    : "→ Hoàn thành mùa vụ"}
+                </p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="diary-content">Nội dung nhật ký</Label>
+              <Textarea
+                id="diary-content"
+                placeholder="Mô tả công việc đã làm, kết quả, ghi chú..."
+                rows={4}
+                value={diaryContent}
+                onChange={(e) => setDiaryContent(e.target.value)}
+                data-testid="input-diary-content"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="diary-image" className="flex items-center gap-1">
+                <Image className="h-3.5 w-3.5" /> Ảnh minh chứng (URL)
+              </Label>
+              <Input
+                id="diary-image"
+                placeholder="Dán link ảnh (tùy chọn)..."
+                value={diaryImage}
+                onChange={(e) => setDiaryImage(e.target.value)}
+                data-testid="input-diary-image"
+              />
+              {diaryImage && (
+                <img
+                  src={diaryImage}
+                  alt="Preview"
+                  className="max-w-[200px] max-h-[120px] rounded-md border object-cover mt-1"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+            </div>
+            <Button
+              className="w-full"
+              onClick={confirmAdvance}
+              disabled={updateMutation.isPending}
+              data-testid="button-confirm-advance"
+            >
+              {updateMutation.isPending ? "Đang xử lý..." : "Xác nhận & Ghi nhật ký"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ScrollArea>
   );
 }

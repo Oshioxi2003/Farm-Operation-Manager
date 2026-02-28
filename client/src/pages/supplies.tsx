@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -285,8 +286,8 @@ export default function Supplies() {
                       const cfg = statusConfig[supply.status || "ok"];
                       const isExpanded = expandedSupply === supply.id;
                       return (
-                        <>
-                          <TableRow key={supply.id} data-testid={`row-supply-${supply.id}`}>
+                        <Fragment key={supply.id}>
+                          <TableRow data-testid={`row-supply-${supply.id}`}>
                             <TableCell className="font-medium">{supply.name}</TableCell>
                             <TableCell className="text-muted-foreground">{supply.category || "-"}</TableCell>
                             <TableCell className="text-right">{supply.currentStock} {supply.unit}</TableCell>
@@ -361,7 +362,7 @@ export default function Supplies() {
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </Fragment>
                       );
                     })}
                   </TableBody>
