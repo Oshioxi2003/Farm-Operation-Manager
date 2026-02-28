@@ -10,7 +10,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Users, Phone } from "lucide-react";
+import { Plus, Users, Phone, KeyRound, Lock, Unlock } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,9 @@ const roleLabels: Record<string, string> = {
 
 export default function UsersPage() {
   const [open, setOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwUserId, setPwUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   const { toast } = useToast();
 
   const { data: users, isLoading } = useQuery<User[]>({ queryKey: ["/api/users"] });
@@ -39,6 +42,23 @@ export default function UsersPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      const res = await apiRequest("PATCH", `/api/users/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setPwOpen(false);
+      setPwUserId(null);
+      setNewPassword("");
+      toast({ title: "Thành công", description: "Đã cập nhật" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -49,6 +69,21 @@ export default function UsersPage() {
       role: fd.get("role") as string,
       phone: fd.get("phone") as string,
     });
+  };
+
+  const handleChangePassword = () => {
+    if (!pwUserId || !newPassword) return;
+    updateMutation.mutate({ id: pwUserId, data: { password: newPassword } });
+  };
+
+  const toggleLock = (user: User) => {
+    updateMutation.mutate({ id: user.id, data: { isLocked: !user.isLocked } });
+  };
+
+  const openChangePw = (userId: string) => {
+    setPwUserId(userId);
+    setNewPassword("");
+    setPwOpen(true);
   };
 
   return (
@@ -116,11 +151,15 @@ export default function UsersPage() {
               <Card key={user.id} className="hover-elevate" data-testid={`card-user-${user.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground font-medium">
-                      {user.fullName.split(" ").map(w => w[0]).slice(-2).join("").toUpperCase()}
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-medium ${user.isLocked ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>
+                      {user.isLocked ? (
+                        <Lock className="h-5 w-5" />
+                      ) : (
+                        user.fullName.split(" ").map(w => w[0]).slice(-2).join("").toUpperCase()
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{user.fullName}</p>
+                      <p className={`font-medium truncate ${user.isLocked ? "line-through text-muted-foreground" : ""}`}>{user.fullName}</p>
                       <p className="text-sm text-muted-foreground">@{user.username}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <Badge
@@ -129,6 +168,11 @@ export default function UsersPage() {
                         >
                           {roleLabels[user.role]}
                         </Badge>
+                        {user.isLocked && (
+                          <Badge variant="destructive" className="text-xs no-default-active-elevate">
+                            Đã khóa
+                          </Badge>
+                        )}
                         {user.phone && (
                           <span className="text-xs text-muted-foreground flex items-center gap-0.5">
                             <Phone className="h-3 w-3" /> {user.phone}
@@ -136,6 +180,31 @@ export default function UsersPage() {
                         )}
                       </div>
                     </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 h-8 text-xs"
+                      onClick={() => openChangePw(user.id)}
+                      data-testid={`button-change-pw-${user.id}`}
+                    >
+                      <KeyRound className="mr-1 h-3 w-3" /> Đổi mật khẩu
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={user.isLocked ? "default" : "destructive"}
+                      className="flex-1 h-8 text-xs"
+                      onClick={() => toggleLock(user)}
+                      disabled={updateMutation.isPending}
+                      data-testid={`button-lock-${user.id}`}
+                    >
+                      {user.isLocked ? (
+                        <><Unlock className="mr-1 h-3 w-3" /> Mở khóa</>
+                      ) : (
+                        <><Lock className="mr-1 h-3 w-3" /> Khóa TK</>
+                      )}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -148,6 +217,35 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {/* Change password dialog */}
+      <Dialog open={pwOpen} onOpenChange={(o) => { setPwOpen(o); if (!o) { setPwUserId(null); setNewPassword(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Đổi mật khẩu</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="newPassword">Mật khẩu mới *</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                data-testid="input-new-password"
+              />
+            </div>
+            <Button
+              onClick={handleChangePassword}
+              className="w-full"
+              disabled={!newPassword || updateMutation.isPending}
+            >
+              {updateMutation.isPending ? "Đang lưu..." : "Cập nhật mật khẩu"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ScrollArea>
   );
 }

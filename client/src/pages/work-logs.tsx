@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,11 +11,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, BookOpen, Clock } from "lucide-react";
+import { Plus, BookOpen, Clock, Package } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { WorkLog, Season, Task, User } from "@shared/schema";
+import type { WorkLog, Season, Task, User, Supply } from "@shared/schema";
 
 export default function WorkLogs() {
   const [open, setOpen] = useState(false);
@@ -23,6 +24,7 @@ export default function WorkLogs() {
   const { data: seasons } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: tasks } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
+  const { data: supplies } = useQuery<Supply[]>({ queryKey: ["/api/supplies"] });
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -45,6 +47,8 @@ export default function WorkLogs() {
       seasonId: fd.get("seasonId") as string || null,
       userId: fd.get("userId") as string || null,
       hoursWorked: parseFloat(fd.get("hoursWorked") as string) || null,
+      supplyId: fd.get("supplyId") as string || null,
+      supplyQuantity: parseFloat(fd.get("supplyQuantity") as string) || null,
     });
   };
 
@@ -102,6 +106,24 @@ export default function WorkLogs() {
                     <Input id="hoursWorked" name="hoursWorked" type="number" step="0.5" data-testid="input-log-hours" />
                   </div>
                 </div>
+                {/* Supply usage section */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Vật tư sử dụng</Label>
+                    <Select name="supplyId">
+                      <SelectTrigger data-testid="select-log-supply"><SelectValue placeholder="Chọn vật tư" /></SelectTrigger>
+                      <SelectContent>
+                        {supplies?.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name} ({s.currentStock} {s.unit})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="supplyQuantity">Số lượng sử dụng</Label>
+                    <Input id="supplyQuantity" name="supplyQuantity" type="number" step="0.1" data-testid="input-log-supply-qty" />
+                  </div>
+                </div>
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-log">
                   {createMutation.isPending ? "Đang lưu..." : "Lưu nhật ký"}
                 </Button>
@@ -120,6 +142,7 @@ export default function WorkLogs() {
               const user = users?.find(u => u.id === log.userId);
               const task = tasks?.find(t => t.id === log.taskId);
               const season = seasons?.find(s => s.id === log.seasonId);
+              const supply = supplies?.find(s => s.id === log.supplyId);
               return (
                 <Card key={log.id} data-testid={`card-log-${log.id}`}>
                   <CardContent className="p-4">
@@ -136,6 +159,11 @@ export default function WorkLogs() {
                           {log.hoursWorked && (
                             <span className="flex items-center gap-0.5">
                               <Clock className="h-3 w-3" /> {log.hoursWorked}h
+                            </span>
+                          )}
+                          {supply && (
+                            <span className="flex items-center gap-0.5">
+                              <Package className="h-3 w-3" /> {supply.name}: {log.supplyQuantity} {supply.unit}
                             </span>
                           )}
                           {log.createdAt && (

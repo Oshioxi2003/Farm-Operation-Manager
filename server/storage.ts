@@ -1,7 +1,7 @@
 import { eq, desc, and, lte, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
-  users, crops, seasons, tasks, workLogs, supplies, supplyTransactions, climateReadings, alerts,
+  users, crops, seasons, tasks, workLogs, supplies, supplyTransactions, climateReadings, alerts, notifications,
   type User, type InsertUser,
   type Crop, type InsertCrop,
   type Season, type InsertSeason,
@@ -11,6 +11,7 @@ import {
   type SupplyTransaction, type InsertSupplyTransaction,
   type ClimateReading, type InsertClimateReading,
   type Alert, type InsertAlert,
+  type Notification, type InsertNotification,
 } from "@shared/schema";
 import crypto from "crypto";
 
@@ -22,6 +23,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   getUsers(): Promise<User[]>;
 
   getCrops(): Promise<Crop[]>;
@@ -35,6 +37,7 @@ export interface IStorage {
   createSeason(season: InsertSeason): Promise<Season>;
   updateSeason(id: string, season: Partial<InsertSeason>): Promise<Season | undefined>;
   deleteSeason(id: string): Promise<void>;
+  copySeason(id: string): Promise<Season>;
 
   getTasks(): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
@@ -69,6 +72,12 @@ export interface IStorage {
   markAlertRead(id: string): Promise<void>;
   markAllAlertsRead(): Promise<void>;
 
+  getNotifications(userId: string): Promise<Notification[]>;
+  getUnreadNotifications(userId: string): Promise<Notification[]>;
+  createNotification(n: InsertNotification): Promise<Notification>;
+  markNotificationRead(id: string): Promise<void>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+
   getDashboardStats(): Promise<{
     activeSeasons: number;
     todayTasks: number;
@@ -93,6 +102,12 @@ export class DatabaseStorage implements IStorage {
     await db.insert(users).values({ ...user, id });
     const [created] = await db.select().from(users).where(eq(users.id, id));
     return created;
+  }
+
+  async updateUser(id: string, data: Partial<InsertUser>) {
+    await db.update(users).set(data).where(eq(users.id, id));
+    const [updated] = await db.select().from(users).where(eq(users.id, id));
+    return updated;
   }
 
   async getUsers() {
@@ -149,6 +164,48 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSeason(id: string) {
     await db.delete(seasons).where(eq(seasons.id, id));
+  }
+
+  async copySeason(id: string) {
+    const original = await this.getSeason(id);
+    if (!original) throw new Error("Season not found");
+
+    const newId = generateId();
+    await db.insert(seasons).values({
+      id: newId,
+      name: `${original.name} (Bản sao)`,
+      cropId: original.cropId,
+      status: "planning",
+      currentStage: original.currentStage,
+      startDate: original.startDate,
+      endDate: original.endDate,
+      area: original.area,
+      areaUnit: original.areaUnit,
+      notes: original.notes,
+      progress: 0,
+      estimatedYield: original.estimatedYield,
+      cultivationZone: original.cultivationZone,
+    });
+
+    // Copy all tasks from the original season
+    const originalTasks = await this.getTasksBySeason(id);
+    for (const task of originalTasks) {
+      const taskId = generateId();
+      await db.insert(tasks).values({
+        id: taskId,
+        title: task.title,
+        description: task.description,
+        seasonId: newId,
+        assigneeId: task.assigneeId,
+        status: "todo",
+        priority: task.priority,
+        stage: task.stage,
+        dueDate: task.dueDate,
+      });
+    }
+
+    const [created] = await db.select().from(seasons).where(eq(seasons.id, newId));
+    return created;
   }
 
   async getTasks() {
@@ -297,6 +354,35 @@ export class DatabaseStorage implements IStorage {
 
   async markAllAlertsRead() {
     await db.update(alerts).set({ isRead: true }).where(eq(alerts.isRead, false));
+  }
+
+  // ── Notifications ──
+  async getNotifications(userId: string) {
+    return db.select().from(notifications)
+      .where(eq(notifications.targetUserId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadNotifications(userId: string) {
+    return db.select().from(notifications)
+      .where(and(eq(notifications.targetUserId, userId), eq(notifications.isRead, false)))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(n: InsertNotification) {
+    const id = generateId();
+    await db.insert(notifications).values({ ...n, id });
+    const [created] = await db.select().from(notifications).where(eq(notifications.id, id));
+    return created;
+  }
+
+  async markNotificationRead(id: string) {
+    await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsRead(userId: string) {
+    await db.update(notifications).set({ isRead: true })
+      .where(and(eq(notifications.targetUserId, userId), eq(notifications.isRead, false)));
   }
 
   async getDashboardStats() {

@@ -9,8 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Sprout, Thermometer, Droplets, Search } from "lucide-react";
+import { Plus, Sprout, Thermometer, Droplets, Search, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +25,8 @@ import { useAuth } from "@/lib/auth-context";
 export default function Crops() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editCrop, setEditCrop] = useState<Crop | null>(null);
   const { toast } = useToast();
   const { isManager } = useAuth();
 
@@ -34,6 +41,29 @@ export default function Crops() {
       queryClient.invalidateQueries({ queryKey: ["/api/crops"] });
       setOpen(false);
       toast({ title: "Thành công", description: "Đã thêm cây trồng mới" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      const res = await apiRequest("PATCH", `/api/crops/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crops"] });
+      setEditOpen(false);
+      setEditCrop(null);
+      toast({ title: "Thành công", description: "Đã cập nhật cây trồng" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/crops/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crops"] });
+      toast({ title: "Thành công", description: "Đã xóa cây trồng" });
     },
   });
 
@@ -55,6 +85,30 @@ export default function Crops() {
       optimalPh: fd.get("optimalPh") as string,
       careInstructions: fd.get("careInstructions") as string,
     });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editCrop) return;
+    const fd = new FormData(e.currentTarget);
+    updateMutation.mutate({
+      id: editCrop.id,
+      data: {
+        name: fd.get("name") as string,
+        variety: fd.get("variety") as string,
+        description: fd.get("description") as string,
+        growthDuration: parseInt(fd.get("growthDuration") as string) || null,
+        optimalTemp: fd.get("optimalTemp") as string,
+        optimalHumidity: fd.get("optimalHumidity") as string,
+        optimalPh: fd.get("optimalPh") as string,
+        careInstructions: fd.get("careInstructions") as string,
+      },
+    });
+  };
+
+  const openEdit = (crop: Crop) => {
+    setEditCrop(crop);
+    setEditOpen(true);
   };
 
   return (
@@ -140,16 +194,47 @@ export default function Crops() {
         ) : filtered && filtered.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((crop) => (
-              <Card key={crop.id} className="hover-elevate cursor-pointer" data-testid={`card-crop-${crop.id}`}>
+              <Card key={crop.id} className="hover-elevate" data-testid={`card-crop-${crop.id}`}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-chart-2/10">
                       <Sprout className="h-5 w-5 text-chart-2" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <CardTitle className="text-base truncate">{crop.name}</CardTitle>
                       {crop.variety && <p className="text-xs text-muted-foreground">{crop.variety}</p>}
                     </div>
+                    {isManager && (
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(crop)} data-testid={`button-edit-crop-${crop.id}`}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" data-testid={`button-delete-crop-${crop.id}`}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Xóa cây trồng</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Bạn có chắc muốn xóa "{crop.name}"? Thao tác này không thể hoàn tác.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Hủy</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteMutation.mutate(crop.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Xóa
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -189,6 +274,60 @@ export default function Crops() {
           </div>
         )}
       </div>
+
+      {/* Edit crop dialog */}
+      <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) setEditCrop(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa cây trồng</DialogTitle>
+          </DialogHeader>
+          {editCrop && (
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-name">Tên cây *</Label>
+                  <Input id="edit-name" name="name" required defaultValue={editCrop.name} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-variety">Giống</Label>
+                  <Input id="edit-variety" name="variety" defaultValue={editCrop.variety || ""} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-description">Mô tả</Label>
+                <Textarea id="edit-description" name="description" defaultValue={editCrop.description || ""} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-growthDuration">Thời gian sinh trưởng (ngày)</Label>
+                  <Input id="edit-growthDuration" name="growthDuration" type="number" defaultValue={editCrop.growthDuration || ""} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-optimalTemp">Nhiệt độ lý tưởng</Label>
+                  <Input id="edit-optimalTemp" name="optimalTemp" defaultValue={editCrop.optimalTemp || ""} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-optimalHumidity">Độ ẩm lý tưởng</Label>
+                  <Input id="edit-optimalHumidity" name="optimalHumidity" defaultValue={editCrop.optimalHumidity || ""} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-optimalPh">pH lý tưởng</Label>
+                  <Input id="edit-optimalPh" name="optimalPh" defaultValue={editCrop.optimalPh || ""} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-careInstructions">Hướng dẫn chăm sóc</Label>
+                <Textarea id="edit-careInstructions" name="careInstructions" defaultValue={editCrop.careInstructions || ""} />
+              </div>
+              <Button type="submit" className="w-full" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Đang lưu..." : "Cập nhật"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </ScrollArea>
   );
 }

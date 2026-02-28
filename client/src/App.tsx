@@ -9,7 +9,7 @@ import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { Alert } from "@shared/schema";
+import type { Alert, Notification } from "@shared/schema";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
@@ -31,16 +31,38 @@ const severityColors: Record<string, string> = {
 
 function NotificationBell() {
   const { data: alerts } = useQuery<Alert[]>({ queryKey: ["/api/alerts/unread"] });
-  const count = alerts?.length || 0;
+  const { data: notifications } = useQuery<Notification[]>({ queryKey: ["/api/notifications/unread"] });
+
+  const alertCount = alerts?.length || 0;
+  const notifCount = notifications?.length || 0;
+  const totalCount = alertCount + notifCount;
 
   const markAllRead = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/alerts/read-all"),
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/alerts/read-all");
+      await apiRequest("POST", "/api/notifications/read-all");
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/alerts/unread"] });
       queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     },
   });
+
+  // Combine both lists for display
+  const allItems: { id: string; title: string; message: string; severity: string; type: "alert" | "notification" }[] = [];
+  if (alerts) {
+    for (const a of alerts) {
+      allItems.push({ id: a.id, title: a.title, message: a.message, severity: a.severity, type: "alert" });
+    }
+  }
+  if (notifications) {
+    for (const n of notifications) {
+      allItems.push({ id: n.id, title: n.title, message: n.message, severity: "info", type: "notification" });
+    }
+  }
 
   return (
     <Popover>
@@ -49,17 +71,17 @@ function NotificationBell() {
           <Button size="icon" variant="ghost" data-testid="button-notifications">
             <Bell className="h-4 w-4" />
           </Button>
-          {count > 0 && (
+          {totalCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-medium px-1" data-testid="text-notification-count">
-              {count}
+              {totalCount}
             </span>
           )}
         </div>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between gap-1 p-3 border-b">
-          <p className="text-sm font-semibold">Thông báo ({count})</p>
-          {count > 0 && (
+          <p className="text-sm font-semibold">Thông báo ({totalCount})</p>
+          {totalCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -72,16 +94,16 @@ function NotificationBell() {
           )}
         </div>
         <ScrollArea className="max-h-64">
-          {alerts && alerts.length > 0 ? (
+          {allItems.length > 0 ? (
             <div className="p-2 space-y-1">
-              {alerts.map((alert) => (
+              {allItems.map((item) => (
                 <div
-                  key={alert.id}
-                  className={`rounded-md p-2.5 text-xs ${severityColors[alert.severity]}`}
-                  data-testid={`notification-${alert.id}`}
+                  key={`${item.type}-${item.id}`}
+                  className={`rounded-md p-2.5 text-xs ${severityColors[item.severity] || severityColors.info}`}
+                  data-testid={`notification-${item.id}`}
                 >
-                  <p className="font-medium">{alert.title}</p>
-                  <p className="mt-0.5 opacity-80">{alert.message}</p>
+                  <p className="font-medium">{item.title}</p>
+                  <p className="mt-0.5 opacity-80">{item.message}</p>
                 </div>
               ))}
             </div>

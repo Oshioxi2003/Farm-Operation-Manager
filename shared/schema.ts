@@ -11,6 +11,7 @@ export const users = mysqlTable("users", {
   role: mysqlEnum("role", ["manager", "farmer"]).notNull().default("farmer"),
   phone: text("phone"),
   avatar: text("avatar"),
+  isLocked: boolean("is_locked").default(false),
 });
 
 export const crops = mysqlTable("crops", {
@@ -38,6 +39,8 @@ export const seasons = mysqlTable("seasons", {
   areaUnit: text("area_unit").default("ha"),
   notes: text("notes"),
   progress: int("progress").default(0),
+  estimatedYield: float("estimated_yield"),
+  cultivationZone: text("cultivation_zone"),
 });
 
 export const tasks = mysqlTable("tasks", {
@@ -52,6 +55,7 @@ export const tasks = mysqlTable("tasks", {
   dueDate: date("due_date"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  proofImage: text("proof_image"),
 });
 
 export const workLogs = mysqlTable("work_logs", {
@@ -62,6 +66,8 @@ export const workLogs = mysqlTable("work_logs", {
   content: text("content").notNull(),
   hoursWorked: float("hours_worked"),
   createdAt: timestamp("created_at").defaultNow(),
+  supplyId: varchar("supply_id", { length: 36 }).references(() => supplies.id),
+  supplyQuantity: float("supply_quantity"),
 });
 
 export const supplies = mysqlTable("supplies", {
@@ -108,6 +114,16 @@ export const alerts = mysqlTable("alerts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const notifications = mysqlTable("notifications", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+  targetUserId: varchar("target_user_id", { length: 36 }).references(() => users.id),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  relatedId: varchar("related_id", { length: 36 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertCropSchema = createInsertSchema(crops).omit({ id: true });
 export const insertSeasonSchema = createInsertSchema(seasons).omit({ id: true });
@@ -117,6 +133,7 @@ export const insertSupplySchema = createInsertSchema(supplies).omit({ id: true }
 export const insertSupplyTransactionSchema = createInsertSchema(supplyTransactions).omit({ id: true, createdAt: true });
 export const insertClimateReadingSchema = createInsertSchema(climateReadings).omit({ id: true, recordedAt: true });
 export const insertAlertSchema = createInsertSchema(alerts).omit({ id: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -136,3 +153,5 @@ export type InsertClimateReading = z.infer<typeof insertClimateReadingSchema>;
 export type ClimateReading = typeof climateReadings.$inferSelect;
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
 export type Alert = typeof alerts.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;

@@ -38,6 +38,11 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Tên đăng nhập hoặc mật khẩu không đúng" });
     }
 
+    // Check if user is locked
+    if (user.isLocked) {
+      return res.status(403).json({ message: "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên." });
+    }
+
     const payload: AuthPayload = { id: user.id, username: user.username as string, role: user.role };
     const token = signToken(payload);
 
@@ -72,6 +77,10 @@ export async function registerRoutes(
       res.clearCookie(COOKIE_NAME, { path: "/" });
       return res.status(401).json({ message: "Người dùng không tồn tại" });
     }
+    if (user.isLocked) {
+      res.clearCookie(COOKIE_NAME, { path: "/" });
+      return res.status(403).json({ message: "Tài khoản đã bị khóa" });
+    }
     res.json({
       id: user.id,
       username: user.username,
@@ -91,7 +100,7 @@ export async function registerRoutes(
     res.json(stats);
   });
 
-  // ── USERS ── (manager only for create)
+  // ── USERS ── (manager only for create/update)
   app.get("/api/users", requireAuth, async (_req, res) => {
     const users = await storage.getUsers();
     res.json(users);
@@ -101,6 +110,19 @@ export async function registerRoutes(
     const parsed = insertUserSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const user = await storage.createUser(parsed.data);
+    res.json(user);
+  });
+
+  app.patch("/api/users/:id", requireManager, async (req, res) => {
+    const { password, isLocked } = req.body;
+    const updateData: Record<string, unknown> = {};
+    if (password !== undefined) updateData.password = password;
+    if (isLocked !== undefined) updateData.isLocked = isLocked;
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: "Không có dữ liệu cập nhật" });
+    }
+    const user = await storage.updateUser(req.params.id, updateData as any);
+    if (!user) return res.status(404).json({ message: "Không tìm thấy" });
     res.json(user);
   });
 
@@ -155,6 +177,15 @@ export async function registerRoutes(
     res.json(season);
   });
 
+  app.post("/api/seasons/:id/copy", requireManager, async (req, res) => {
+    try {
+      const season = await storage.copySeason(req.params.id);
+      res.json(season);
+    } catch (error: any) {
+      res.status(404).json({ message: error.message || "Không tìm thấy mùa vụ" });
+    }
+  });
+
   app.patch("/api/seasons/:id", requireManager, async (req, res) => {
     const parsed = insertSeasonSchema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -194,29 +225,81 @@ export async function registerRoutes(
     const parsed = insertTaskSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const task = await storage.createTask(parsed.data);
+
+    // Send notification to assigned farmer
+    if (parsed.data.assigneeId) {
+      const assignee = await storage.getUser(parsed.data.assigneeId);
+      if (assignee) {
+        await storage.createNotification({
+          targetUserId: parsed.data.assigneeId,
+          title: "Công việc mới được giao",
+          message: `Bạn được giao công việc: "${parsed.data.title}"`,
+          isRead: false,
+          relatedId: task.id,
+        });
+      }
+    }
+
     res.json(task);
   });
 
-  // Farmer can update task status; manager can update anything
+  // Farmer can update task status; manager can update anything (except mark done)
   app.patch("/api/tasks/:id", requireAuth, async (req, res) => {
+    const existingTask = await storage.getTask(req.params.id);
+    if (!existingTask) return res.status(404).json({ message: "Không tìm thấy" });
+
     if (req.user!.role === "farmer") {
-      // Farmer can only update status
-      const allowed = { status: req.body.status };
-      if (!allowed.status) {
+      // Farmer can update status and proofImage
+      const allowed: Record<string, unknown> = {};
+      if (req.body.status) allowed.status = req.body.status;
+      if (req.body.proofImage !== undefined) allowed.proofImage = req.body.proofImage;
+      if (req.body.status === "done") {
+        allowed.completedAt = new Date();
+      }
+      if (Object.keys(allowed).length === 0) {
         return res.status(403).json({ message: "Bạn chỉ có thể cập nhật trạng thái công việc" });
       }
-      const task = await storage.updateTask(req.params.id, allowed);
-      if (!task) return res.status(404).json({ message: "Không tìm thấy" });
+      const task = await storage.updateTask(req.params.id, allowed as any);
       return res.json(task);
     }
+
+    // Manager: cannot mark task as "done"
+    if (req.body.status === "done") {
+      return res.status(403).json({ message: "Chỉ nông dân mới có thể hoàn thành công việc" });
+    }
+
+    // Manager: can only edit tasks with status "todo"
+    if (existingTask.status !== "todo" && !req.body.status) {
+      return res.status(403).json({ message: "Chỉ có thể chỉnh sửa công việc ở trạng thái 'Chờ làm'" });
+    }
+
     const parsed = insertTaskSchema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    // If assignee changed, send notification
+    if (parsed.data.assigneeId && parsed.data.assigneeId !== existingTask.assigneeId) {
+      const assignee = await storage.getUser(parsed.data.assigneeId);
+      if (assignee) {
+        await storage.createNotification({
+          targetUserId: parsed.data.assigneeId,
+          title: "Công việc mới được giao",
+          message: `Bạn được giao công việc: "${existingTask.title}"`,
+          isRead: false,
+          relatedId: existingTask.id,
+        });
+      }
+    }
+
     const task = await storage.updateTask(req.params.id, parsed.data);
-    if (!task) return res.status(404).json({ message: "Không tìm thấy" });
     res.json(task);
   });
 
   app.delete("/api/tasks/:id", requireManager, async (req, res) => {
+    const task = await storage.getTask(req.params.id);
+    if (!task) return res.status(404).json({ message: "Không tìm thấy" });
+    if (task.status !== "todo") {
+      return res.status(403).json({ message: "Chỉ có thể xóa công việc ở trạng thái 'Chờ làm'" });
+    }
     await storage.deleteTask(req.params.id);
     res.json({ success: true });
   });
@@ -322,7 +405,7 @@ export async function registerRoutes(
         }
       }
 
-
+      if (newCount > 0) console.log(`Synced ${newCount} weather readings to database`);
 
       const current = weather.current;
       if (current.temperature != null && current.temperature > 38) {
@@ -333,7 +416,8 @@ export async function registerRoutes(
       }
 
       res.json(weather);
-    } catch {
+    } catch (error) {
+      console.error("Weather API error:", error);
       res.status(500).json({ message: "Không thể lấy dữ liệu thời tiết" });
     }
   });
@@ -377,6 +461,27 @@ export async function registerRoutes(
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const alert = await storage.createAlert(parsed.data);
     res.json(alert);
+  });
+
+  // ── NOTIFICATIONS ──
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    const notifs = await storage.getNotifications(req.user!.id);
+    res.json(notifs);
+  });
+
+  app.get("/api/notifications/unread", requireAuth, async (req, res) => {
+    const notifs = await storage.getUnreadNotifications(req.user!.id);
+    res.json(notifs);
+  });
+
+  app.patch("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    await storage.markNotificationRead(req.params.id);
+    res.json({ success: true });
+  });
+
+  app.post("/api/notifications/read-all", requireAuth, async (req, res) => {
+    await storage.markAllNotificationsRead(req.user!.id);
+    res.json({ success: true });
   });
 
   return httpServer;

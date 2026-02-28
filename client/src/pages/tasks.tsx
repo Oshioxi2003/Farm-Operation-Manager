@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, ClipboardList, CheckCircle2, Clock, AlertTriangle,
-  Play, MoreVertical,
+  Play, MoreVertical, Pencil, Trash2, Camera, Image,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -22,7 +27,7 @@ import {
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Task, Season, User } from "@shared/schema";
+import type { Task, Season, User, Crop } from "@shared/schema";
 import { useAuth } from "@/lib/auth-context";
 
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
@@ -40,13 +45,21 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
 
 export default function Tasks() {
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeTaskId, setCompleteTaskId] = useState<string | null>(null);
+  const [proofUrl, setProofUrl] = useState("");
   const [tab, setTab] = useState("all");
+  const [filterSeason, setFilterSeason] = useState<string>("all");
+  const [filterCrop, setFilterCrop] = useState<string>("all");
   const { toast } = useToast();
-  const { isManager } = useAuth();
+  const { isManager, isFarmer } = useAuth();
 
   const { data: tasks, isLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: seasons } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
+  const { data: crops } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -57,6 +70,7 @@ export default function Tasks() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       setOpen(false);
       toast({ title: "Thành công", description: "Đã tạo công việc mới" });
     },
@@ -71,11 +85,43 @@ export default function Tasks() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setEditOpen(false);
+      setEditTask(null);
+      setCompleteOpen(false);
+      setCompleteTaskId(null);
+      setProofUrl("");
       toast({ title: "Cập nhật thành công" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
     },
   });
 
-  const filteredTasks = tab === "all" ? tasks : tasks?.filter(t => t.status === tab);
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/tasks/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({ title: "Thành công", description: "Đã xóa công việc" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Apply filters
+  const filteredTasks = tasks?.filter(t => {
+    if (tab !== "all" && t.status !== tab) return false;
+    if (filterSeason !== "all" && t.seasonId !== filterSeason) return false;
+    if (filterCrop !== "all") {
+      const season = seasons?.find(s => s.id === t.seasonId);
+      if (!season || season.cropId !== filterCrop) return false;
+    }
+    return true;
+  });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -90,6 +136,43 @@ export default function Tasks() {
       dueDate: fd.get("dueDate") as string || null,
       status: "todo",
     });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editTask) return;
+    const fd = new FormData(e.currentTarget);
+    updateMutation.mutate({
+      id: editTask.id,
+      data: {
+        title: fd.get("title") as string,
+        description: fd.get("description") as string,
+        seasonId: fd.get("seasonId") as string || null,
+        assigneeId: fd.get("assigneeId") as string || null,
+        priority: fd.get("priority") as string || "medium",
+        stage: fd.get("stage") as string || null,
+        dueDate: fd.get("dueDate") as string || null,
+      },
+    });
+  };
+
+  const handleComplete = () => {
+    if (!completeTaskId) return;
+    updateMutation.mutate({
+      id: completeTaskId,
+      data: { status: "done", proofImage: proofUrl || null },
+    });
+  };
+
+  const openEdit = (task: Task) => {
+    setEditTask(task);
+    setEditOpen(true);
+  };
+
+  const openComplete = (taskId: string) => {
+    setCompleteTaskId(taskId);
+    setProofUrl("");
+    setCompleteOpen(true);
   };
 
   const counts = {
@@ -181,6 +264,28 @@ export default function Tasks() {
           </Dialog>
         </div>
 
+        {/* Filter bar */}
+        <div className="flex gap-3 flex-wrap">
+          <Select value={filterSeason} onValueChange={setFilterSeason}>
+            <SelectTrigger className="w-[180px]" data-testid="filter-task-season">
+              <SelectValue placeholder="Mùa vụ" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả mùa vụ</SelectItem>
+              {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterCrop} onValueChange={setFilterCrop}>
+            <SelectTrigger className="w-[180px]" data-testid="filter-task-crop">
+              <SelectValue placeholder="Cây trồng" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả cây trồng</SelectItem>
+              {crops?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList data-testid="tabs-task-status">
             <TabsTrigger value="all">Tất cả ({counts.all})</TabsTrigger>
@@ -217,6 +322,11 @@ export default function Tasks() {
                               <Badge variant="outline" className={`text-[10px] shrink-0 no-default-active-elevate ${pri.color}`}>
                                 {pri.label}
                               </Badge>
+                              {task.proofImage && (
+                                <Badge variant="outline" className="text-[10px] shrink-0 no-default-active-elevate">
+                                  <Image className="mr-0.5 h-2.5 w-2.5" /> Có ảnh
+                                </Badge>
+                              )}
                             </div>
                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
                               {assignee && <span>{assignee.fullName}</span>}
@@ -236,14 +346,30 @@ export default function Tasks() {
                                   Bắt đầu làm
                                 </DropdownMenuItem>
                               )}
-                              {task.status !== "done" && (
-                                <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "done" } })}>
-                                  Đánh dấu hoàn thành
+                              {/* Only farmer can mark done */}
+                              {isFarmer && task.status !== "done" && (
+                                <DropdownMenuItem onClick={() => openComplete(task.id)}>
+                                  <Camera className="mr-1 h-3.5 w-3.5" /> Hoàn thành
                                 </DropdownMenuItem>
                               )}
                               {task.status === "done" && (
                                 <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "todo" } })}>
                                   Mở lại
+                                </DropdownMenuItem>
+                              )}
+                              {/* Edit only when todo, manager only */}
+                              {isManager && task.status === "todo" && (
+                                <DropdownMenuItem onClick={() => openEdit(task)}>
+                                  <Pencil className="mr-1 h-3.5 w-3.5" /> Chỉnh sửa
+                                </DropdownMenuItem>
+                              )}
+                              {/* Delete only when todo, manager only */}
+                              {isManager && task.status === "todo" && (
+                                <DropdownMenuItem
+                                  onClick={() => deleteMutation.mutate(task.id)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-1 h-3.5 w-3.5" /> Xóa
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -263,6 +389,105 @@ export default function Tasks() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Edit task dialog */}
+      <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) setEditTask(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa công việc</DialogTitle>
+          </DialogHeader>
+          {editTask && (
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-title">Tiêu đề *</Label>
+                <Input id="edit-title" name="title" required defaultValue={editTask.title} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-description">Mô tả</Label>
+                <Textarea id="edit-description" name="description" defaultValue={editTask.description || ""} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Mùa vụ</Label>
+                  <Select name="seasonId" defaultValue={editTask.seasonId || undefined}>
+                    <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
+                    <SelectContent>
+                      {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Phân công</Label>
+                  <Select name="assigneeId" defaultValue={editTask.assigneeId || undefined}>
+                    <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
+                    <SelectContent>
+                      {users?.map(u => <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Ưu tiên</Label>
+                  <Select name="priority" defaultValue={editTask.priority || "medium"}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Thấp</SelectItem>
+                      <SelectItem value="medium">Trung bình</SelectItem>
+                      <SelectItem value="high">Cao</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Giai đoạn</Label>
+                  <Select name="stage" defaultValue={editTask.stage || undefined}>
+                    <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="planting">Gieo trồng</SelectItem>
+                      <SelectItem value="caring">Chăm bón</SelectItem>
+                      <SelectItem value="harvesting">Thu hoạch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-dueDate">Hạn</Label>
+                  <Input id="edit-dueDate" name="dueDate" type="date" defaultValue={editTask.dueDate ? String(editTask.dueDate) : ""} />
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Đang lưu..." : "Cập nhật"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Complete with proof dialog */}
+      <Dialog open={completeOpen} onOpenChange={(o) => { setCompleteOpen(o); if (!o) { setCompleteTaskId(null); setProofUrl(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hoàn thành công việc</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Bạn có thể đính kèm link ảnh minh chứng (không bắt buộc).
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="proofUrl">Link ảnh minh chứng</Label>
+              <Input
+                id="proofUrl"
+                value={proofUrl}
+                onChange={(e) => setProofUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg"
+                data-testid="input-proof-url"
+              />
+            </div>
+            <Button onClick={handleComplete} className="w-full" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Đang lưu..." : "Xác nhận hoàn thành"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ScrollArea>
   );
 }
