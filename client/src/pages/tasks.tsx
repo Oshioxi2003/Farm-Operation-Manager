@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, ClipboardList, CheckCircle2, Clock, AlertTriangle,
-  Play, MoreVertical, Pencil, Trash2, Camera, Image,
+  Play, MoreVertical, Pencil, Trash2, Camera, Image, Weight,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -43,6 +43,12 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
   low: { label: "Thấp", color: "bg-muted text-muted-foreground" },
 };
 
+const stageLabels: Record<string, string> = {
+  planting: "Gieo trồng",
+  caring: "Chăm bón",
+  harvesting: "Thu hoạch",
+};
+
 export default function Tasks() {
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -50,11 +56,12 @@ export default function Tasks() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTaskId, setCompleteTaskId] = useState<string | null>(null);
   const [proofUrl, setProofUrl] = useState("");
+  const [harvestYield, setHarvestYield] = useState("");
   const [tab, setTab] = useState("all");
   const [filterSeason, setFilterSeason] = useState<string>("all");
   const [filterCrop, setFilterCrop] = useState<string>("all");
   const { toast } = useToast();
-  const { isManager, isFarmer } = useAuth();
+  const { isManager, isFarmer, user: authUser } = useAuth();
 
   const { data: tasks, isLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: seasons } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
@@ -90,6 +97,7 @@ export default function Tasks() {
       setCompleteOpen(false);
       setCompleteTaskId(null);
       setProofUrl("");
+      setHarvestYield("");
       toast({ title: "Cập nhật thành công" });
     },
     onError: (error: Error) => {
@@ -156,12 +164,46 @@ export default function Tasks() {
     });
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!completeTaskId) return;
-    updateMutation.mutate({
-      id: completeTaskId,
-      data: { status: "done", proofImage: proofUrl || null },
-    });
+    const completeTask = tasks?.find(t => t.id === completeTaskId);
+    const completeData: Record<string, unknown> = {
+      status: "done",
+      proofImage: proofUrl || null,
+    };
+    // Add harvestYield for harvest tasks
+    if (completeTask?.stage === "harvesting" && harvestYield) {
+      completeData.harvestYield = parseFloat(harvestYield);
+    }
+
+    try {
+      await apiRequest("PATCH", `/api/tasks/${completeTaskId}`, completeData);
+
+      // Auto-create work log entry
+      const logContent = completeTask
+        ? `Hoàn thành: ${completeTask.title}${completeTask.stage === "harvesting" && harvestYield ? ` - Sản lượng: ${harvestYield} tấn` : ""}`
+        : "Hoàn thành công việc";
+
+      await apiRequest("POST", "/api/work-logs", {
+        content: logContent,
+        taskId: completeTaskId,
+        seasonId: completeTask?.seasonId || null,
+        userId: authUser?.id || null,
+        hoursWorked: null,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
+      setCompleteOpen(false);
+      setCompleteTaskId(null);
+      setProofUrl("");
+      setHarvestYield("");
+      toast({ title: "Cập nhật thành công", description: "Công việc đã được hoàn thành và ghi nhật ký" });
+    } catch (error: any) {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
+    }
   };
 
   const openEdit = (task: Task) => {
@@ -172,8 +214,12 @@ export default function Tasks() {
   const openComplete = (taskId: string) => {
     setCompleteTaskId(taskId);
     setProofUrl("");
+    setHarvestYield("");
     setCompleteOpen(true);
   };
+
+  const completeTask = tasks?.find(t => t.id === completeTaskId);
+  const isHarvestTask = completeTask?.stage === "harvesting";
 
   const counts = {
     all: tasks?.length || 0,
@@ -322,9 +368,19 @@ export default function Tasks() {
                               <Badge variant="outline" className={`text-[10px] shrink-0 no-default-active-elevate ${pri.color}`}>
                                 {pri.label}
                               </Badge>
+                              {task.stage && (
+                                <Badge variant="outline" className="text-[10px] shrink-0 no-default-active-elevate">
+                                  {stageLabels[task.stage] || task.stage}
+                                </Badge>
+                              )}
                               {task.proofImage && (
                                 <Badge variant="outline" className="text-[10px] shrink-0 no-default-active-elevate">
                                   <Image className="mr-0.5 h-2.5 w-2.5" /> Có ảnh
+                                </Badge>
+                              )}
+                              {(task as any).harvestYield && (
+                                <Badge variant="outline" className="text-[10px] shrink-0 no-default-active-elevate bg-chart-2/10">
+                                  <Weight className="mr-0.5 h-2.5 w-2.5" /> {(task as any).harvestYield} tấn
                                 </Badge>
                               )}
                             </div>
@@ -332,6 +388,7 @@ export default function Tasks() {
                               {assignee && <span>{assignee.fullName}</span>}
                               {season && <span>{season.name}</span>}
                               {task.dueDate && <span>Hạn: {String(task.dueDate)}</span>}
+                              {task.completedAt && <span>Xong: {new Date(task.completedAt).toLocaleDateString("vi-VN")}</span>}
                             </div>
                           </div>
                           <DropdownMenu>
@@ -463,7 +520,7 @@ export default function Tasks() {
       </Dialog>
 
       {/* Complete with proof dialog */}
-      <Dialog open={completeOpen} onOpenChange={(o) => { setCompleteOpen(o); if (!o) { setCompleteTaskId(null); setProofUrl(""); } }}>
+      <Dialog open={completeOpen} onOpenChange={(o) => { setCompleteOpen(o); if (!o) { setCompleteTaskId(null); setProofUrl(""); setHarvestYield(""); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Hoàn thành công việc</DialogTitle>
@@ -482,6 +539,24 @@ export default function Tasks() {
                 data-testid="input-proof-url"
               />
             </div>
+            {/* Harvest yield input - only for harvesting tasks */}
+            {isHarvestTask && (
+              <div className="space-y-1.5">
+                <Label htmlFor="harvestYield" className="flex items-center gap-1">
+                  <Weight className="h-3.5 w-3.5" /> Sản lượng thu hoạch (tấn)
+                </Label>
+                <Input
+                  id="harvestYield"
+                  type="number"
+                  step="0.1"
+                  value={harvestYield}
+                  onChange={(e) => setHarvestYield(e.target.value)}
+                  placeholder="VD: 5.5"
+                  data-testid="input-harvest-yield"
+                />
+                <p className="text-xs text-muted-foreground">Nhập sản lượng thực tế thu hoạch được</p>
+              </div>
+            )}
             <Button onClick={handleComplete} className="w-full" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Đang lưu..." : "Xác nhận hoàn thành"}
             </Button>

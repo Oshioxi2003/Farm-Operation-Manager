@@ -35,14 +35,14 @@ export default function SeasonProgress() {
     },
   });
 
-  const activeSeasons = seasons?.filter(s => s.status === "active") || [];
+  const activeSeasons = seasons?.filter(s => s.status === "active" || s.status === "planning") || [];
 
   const advanceStage = (season: Season) => {
     const idx = season.currentStage ? stageIndex[season.currentStage] : 0;
     if (idx < 2) {
       const nextStage = stages[idx + 1].key as "planting" | "caring" | "harvesting";
       const progress = Math.min(100, (season.progress || 0) + 20);
-      updateMutation.mutate({ id: season.id, data: { currentStage: nextStage, progress } });
+      updateMutation.mutate({ id: season.id, data: { currentStage: nextStage, progress, status: "active" } });
     } else {
       updateMutation.mutate({ id: season.id, data: { status: "completed", progress: 100 } });
     }

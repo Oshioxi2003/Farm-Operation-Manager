@@ -11,14 +11,24 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, BookOpen, Clock, Package } from "lucide-react";
+import { Plus, BookOpen, Clock, Package, Image, CheckCircle2, CalendarDays } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { WorkLog, Season, Task, User, Supply } from "@shared/schema";
 
+const stageLabels: Record<string, string> = {
+  planting: "Gieo trồng",
+  caring: "Chăm bón",
+  harvesting: "Thu hoạch",
+};
+
 export default function WorkLogs() {
   const [open, setOpen] = useState(false);
+  const [filterSeason, setFilterSeason] = useState<string>("all");
+  const [filterStage, setFilterStage] = useState<string>("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const { toast } = useToast();
   const { data: logs, isLoading } = useQuery<WorkLog[]>({ queryKey: ["/api/work-logs"] });
   const { data: seasons } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
@@ -51,6 +61,28 @@ export default function WorkLogs() {
       supplyQuantity: parseFloat(fd.get("supplyQuantity") as string) || null,
     });
   };
+
+  // Filter logs
+  const filteredLogs = logs?.filter(log => {
+    // Filter by season
+    if (filterSeason !== "all" && log.seasonId !== filterSeason) return false;
+
+    // Filter by stage (via linked task)
+    if (filterStage !== "all") {
+      const task = tasks?.find(t => t.id === log.taskId);
+      if (!task || task.stage !== filterStage) return false;
+    }
+
+    // Filter by date range
+    if (filterDateFrom || filterDateTo) {
+      const logDate = log.createdAt ? new Date(log.createdAt).toISOString().split("T")[0] : null;
+      if (!logDate) return false;
+      if (filterDateFrom && logDate < filterDateFrom) return false;
+      if (filterDateTo && logDate > filterDateTo) return false;
+    }
+
+    return true;
+  });
 
   return (
     <ScrollArea className="h-full">
@@ -132,29 +164,124 @@ export default function WorkLogs() {
           </Dialog>
         </div>
 
+        {/* Filter bar */}
+        <div className="flex gap-3 flex-wrap">
+          <Select value={filterSeason} onValueChange={setFilterSeason}>
+            <SelectTrigger className="w-[180px]" data-testid="filter-log-season">
+              <SelectValue placeholder="Mùa vụ" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả mùa vụ</SelectItem>
+              {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStage} onValueChange={setFilterStage}>
+            <SelectTrigger className="w-[160px]" data-testid="filter-log-stage">
+              <SelectValue placeholder="Giai đoạn" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả giai đoạn</SelectItem>
+              <SelectItem value="planting">Gieo trồng</SelectItem>
+              <SelectItem value="caring">Chăm bón</SelectItem>
+              <SelectItem value="harvesting">Thu hoạch</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">Từ ngày</Label>
+            <Input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="w-[140px] h-9"
+              data-testid="filter-log-from"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">Đến ngày</Label>
+            <Input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="w-[140px] h-9"
+              data-testid="filter-log-to"
+            />
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
           </div>
-        ) : logs && logs.length > 0 ? (
+        ) : filteredLogs && filteredLogs.length > 0 ? (
           <div className="space-y-3">
-            {logs.map((log) => {
+            {filteredLogs.map((log) => {
               const user = users?.find(u => u.id === log.userId);
               const task = tasks?.find(t => t.id === log.taskId);
               const season = seasons?.find(s => s.id === log.seasonId);
               const supply = supplies?.find(s => s.id === log.supplyId);
+              const isCompletedTask = task?.status === "done";
               return (
                 <Card key={log.id} data-testid={`card-log-${log.id}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-chart-4/10">
-                        <BookOpen className="h-4 w-4 text-chart-4" />
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${isCompletedTask ? 'bg-chart-2/10' : 'bg-chart-4/10'}`}>
+                        {isCompletedTask ? (
+                          <CheckCircle2 className="h-4 w-4 text-chart-2" />
+                        ) : (
+                          <BookOpen className="h-4 w-4 text-chart-4" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm">{log.content}</p>
+
+                        {/* Show task details for completed tasks */}
+                        {task && isCompletedTask && (
+                          <div className="mt-2 p-2 bg-chart-2/5 rounded-md border border-chart-2/10 space-y-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="text-[10px] bg-chart-2/10 text-chart-2 no-default-active-elevate">
+                                <CheckCircle2 className="mr-0.5 h-2.5 w-2.5" /> Hoàn thành
+                              </Badge>
+                              {task.stage && (
+                                <Badge variant="outline" className="text-[10px] no-default-active-elevate">
+                                  {stageLabels[task.stage] || task.stage}
+                                </Badge>
+                              )}
+                              {task.completedAt && (
+                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                  <CalendarDays className="h-2.5 w-2.5" />
+                                  {new Date(task.completedAt).toLocaleString("vi-VN")}
+                                </span>
+                              )}
+                            </div>
+                            {task.description && (
+                              <p className="text-xs text-muted-foreground">{task.description}</p>
+                            )}
+                            {task.proofImage && (
+                              <div className="mt-1">
+                                <a href={task.proofImage} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                  <Image className="h-3 w-3" /> Xem ảnh minh chứng
+                                </a>
+                                <div className="mt-1">
+                                  <img
+                                    src={task.proofImage}
+                                    alt="Ảnh minh chứng"
+                                    className="max-w-[200px] max-h-[120px] rounded-md border object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            {(task as any).harvestYield && (
+                              <p className="text-xs font-medium text-chart-2">
+                                Sản lượng thu hoạch: {(task as any).harvestYield} tấn
+                              </p>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2 flex-wrap">
                           {user && <span>{user.fullName}</span>}
-                          {task && <span>CV: {task.title}</span>}
+                          {task && !isCompletedTask && <span>CV: {task.title}</span>}
                           {season && <span>{season.name}</span>}
                           {log.hoursWorked && (
                             <span className="flex items-center gap-0.5">

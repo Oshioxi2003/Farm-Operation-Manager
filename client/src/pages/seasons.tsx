@@ -17,7 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import {
   Plus, CalendarDays, Sprout, Leaf, Sun, Copy, ChevronDown,
-  Clock, Play, CheckCircle2, AlertTriangle, MapPin, TrendingUp,
+  Clock, Play, CheckCircle2, AlertTriangle, MapPin, TrendingUp, Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -56,11 +56,31 @@ const taskStatusConfig: Record<string, { label: string; color: string; icon: typ
   overdue: { label: "Quá hạn", color: "bg-destructive/15 text-destructive", icon: AlertTriangle },
 };
 
+interface TemplateTask {
+  title: string;
+  description: string;
+  stage: string;
+  priority: string;
+}
+
 export default function Seasons() {
   const [open, setOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCrop, setFilterCrop] = useState<string>("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [expandedSeason, setExpandedSeason] = useState<string | null>(null);
+  const [templateSeasonId, setTemplateSeasonId] = useState<string>("");
+  const [templateTasks, setTemplateTasks] = useState<TemplateTask[]>([]);
+  // Controlled form fields
+  const [formName, setFormName] = useState("");
+  const [formCropId, setFormCropId] = useState("");
+  const [formStartDate, setFormStartDate] = useState("");
+  const [formEndDate, setFormEndDate] = useState("");
+  const [formArea, setFormArea] = useState("");
+  const [formEstimatedYield, setFormEstimatedYield] = useState("");
+  const [formCultivationZone, setFormCultivationZone] = useState("");
+  const [formNotes, setFormNotes] = useState("");
   const { toast } = useToast();
   const { isManager } = useAuth();
 
@@ -77,6 +97,17 @@ export default function Seasons() {
     enabled: !!expandedSeason,
   });
 
+  // Fetch tasks for selected template season
+  const { data: templateSeasonTasks } = useQuery<Task[]>({
+    queryKey: ["/api/tasks/season", templateSeasonId],
+    queryFn: async () => {
+      if (!templateSeasonId) return [];
+      const res = await fetch(`/api/tasks/season/${templateSeasonId}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: !!templateSeasonId,
+  });
+
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
       const res = await apiRequest("POST", "/api/seasons", data);
@@ -85,6 +116,8 @@ export default function Seasons() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
       setOpen(false);
+      setTemplateSeasonId("");
+      setTemplateTasks([]);
       toast({ title: "Thành công", description: "Đã tạo mùa vụ mới" });
     },
   });
@@ -101,29 +134,117 @@ export default function Seasons() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const resetForm = () => {
+    setFormName(""); setFormCropId(""); setFormStartDate(""); setFormEndDate("");
+    setFormArea(""); setFormEstimatedYield(""); setFormCultivationZone(""); setFormNotes("");
+    setTemplateSeasonId(""); setTemplateTasks([]);
+  };
+
+  const handleTemplateChange = (seasonId: string) => {
+    if (seasonId === "none" || !seasonId) {
+      resetForm();
+      return;
+    }
+    setTemplateSeasonId(seasonId);
+    setTemplateTasks([]);
+    // Auto-fill form fields from selected season
+    const selected = seasons?.find(s => s.id === seasonId);
+    if (selected) {
+      setFormName(selected.name ? `${selected.name} (Mới)` : "");
+      setFormCropId(selected.cropId || "");
+      setFormStartDate(selected.startDate ? String(selected.startDate).split("T")[0] : "");
+      setFormEndDate(selected.endDate ? String(selected.endDate).split("T")[0] : "");
+      setFormArea(selected.area ? String(selected.area) : "");
+      setFormEstimatedYield(selected.estimatedYield ? String(selected.estimatedYield) : "");
+      setFormCultivationZone(selected.cultivationZone || "");
+      setFormNotes(selected.notes || "");
+    }
+  };
+
+  // When template tasks load, populate the editable list
+  const currentTemplateTasks = templateSeasonId && templateSeasonTasks && templateTasks.length === 0 && templateSeasonTasks.length > 0
+    ? templateSeasonTasks.map(t => ({
+        title: t.title,
+        description: t.description || "",
+        stage: t.stage || "planting",
+        priority: t.priority || "medium",
+      }))
+    : templateTasks;
+
+  if (templateSeasonId && templateSeasonTasks && templateTasks.length === 0 && templateSeasonTasks.length > 0) {
+    // Set initial template tasks on first load
+    setTimeout(() => {
+      setTemplateTasks(templateSeasonTasks.map(t => ({
+        title: t.title,
+        description: t.description || "",
+        stage: t.stage || "planting",
+        priority: t.priority || "medium",
+      })));
+    }, 0);
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    createMutation.mutate({
-      name: fd.get("name") as string,
-      cropId: fd.get("cropId") as string,
+    const seasonData = {
+      name: formName,
+      cropId: formCropId || null,
       status: "planning",
       currentStage: "planting",
-      startDate: fd.get("startDate") as string,
-      endDate: fd.get("endDate") as string,
-      area: parseFloat(fd.get("area") as string) || null,
+      startDate: formStartDate || null,
+      endDate: formEndDate || null,
+      area: parseFloat(formArea) || null,
       areaUnit: "ha",
-      notes: fd.get("notes") as string,
+      notes: formNotes || null,
       progress: 0,
-      estimatedYield: parseFloat(fd.get("estimatedYield") as string) || null,
-      cultivationZone: fd.get("cultivationZone") as string || null,
-    });
+      estimatedYield: parseFloat(formEstimatedYield) || null,
+      cultivationZone: formCultivationZone || null,
+    };
+
+    try {
+      const res = await apiRequest("POST", "/api/seasons", seasonData);
+      const newSeason = await res.json();
+
+      // Create template tasks if any
+      const tasksToCreate = currentTemplateTasks.length > 0 ? currentTemplateTasks : [];
+      for (const task of tasksToCreate) {
+        await apiRequest("POST", "/api/tasks", {
+          title: task.title,
+          description: task.description,
+          seasonId: newSeason.id,
+          stage: task.stage,
+          priority: task.priority,
+          status: "todo",
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      setOpen(false);
+      resetForm();
+      toast({ title: "Thành công", description: `Đã tạo mùa vụ mới${tasksToCreate.length > 0 ? ` với ${tasksToCreate.length} công việc` : ""}` });
+    } catch (error) {
+      toast({ title: "Lỗi", description: "Không thể tạo mùa vụ", variant: "destructive" });
+    }
+  };
+
+  const updateTemplateTask = (index: number, field: keyof TemplateTask, value: string) => {
+    const updated = [...(currentTemplateTasks.length > 0 ? currentTemplateTasks : templateTasks)];
+    updated[index] = { ...updated[index], [field]: value };
+    setTemplateTasks(updated);
+  };
+
+  const removeTemplateTask = (index: number) => {
+    const updated = [...(currentTemplateTasks.length > 0 ? currentTemplateTasks : templateTasks)];
+    updated.splice(index, 1);
+    setTemplateTasks(updated);
   };
 
   // Filter logic
   const filteredSeasons = seasons?.filter(s => {
     if (filterStatus !== "all" && s.status !== filterStatus) return false;
     if (filterCrop !== "all" && s.cropId !== filterCrop) return false;
+    if (filterDateFrom && s.startDate && String(s.startDate) < filterDateFrom) return false;
+    if (filterDateTo && s.startDate && String(s.startDate) > filterDateTo) return false;
     return true;
   });
 
@@ -139,22 +260,38 @@ export default function Seasons() {
             <h1 className="text-2xl font-bold" data-testid="text-page-title">Mùa vụ</h1>
             <p className="text-sm text-muted-foreground mt-1">Quản lý các mùa vụ gieo trồng</p>
           </div>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
             {isManager && <DialogTrigger asChild>
               <Button data-testid="button-add-season"><Plus className="mr-1 h-4 w-4" /> Tạo mùa vụ</Button>
             </DialogTrigger>}
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Tạo mùa vụ mới</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Template selection */}
+                <div className="space-y-1.5">
+                  <Label>Sao chép từ mùa vụ (tùy chọn)</Label>
+                  <Select value={templateSeasonId} onValueChange={handleTemplateChange}>
+                    <SelectTrigger data-testid="select-season-template">
+                      <SelectValue placeholder="Chọn mùa vụ mẫu..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">-- Không sao chép --</SelectItem>
+                      {seasons?.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor="name">Tên mùa vụ *</Label>
-                  <Input id="name" name="name" required data-testid="input-season-name" />
+                  <Input id="name" name="name" required value={formName} onChange={(e) => setFormName(e.target.value)} data-testid="input-season-name" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="cropId">Cây trồng</Label>
-                  <Select name="cropId">
+                  <Select name="cropId" value={formCropId} onValueChange={setFormCropId}>
                     <SelectTrigger data-testid="select-season-crop">
                       <SelectValue placeholder="Chọn cây trồng" />
                     </SelectTrigger>
@@ -168,31 +305,82 @@ export default function Seasons() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="startDate">Ngày bắt đầu</Label>
-                    <Input id="startDate" name="startDate" type="date" data-testid="input-season-start" />
+                    <Input id="startDate" name="startDate" type="date" value={formStartDate} onChange={(e) => setFormStartDate(e.target.value)} data-testid="input-season-start" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="endDate">Ngày kết thúc</Label>
-                    <Input id="endDate" name="endDate" type="date" data-testid="input-season-end" />
+                    <Input id="endDate" name="endDate" type="date" value={formEndDate} onChange={(e) => setFormEndDate(e.target.value)} data-testid="input-season-end" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="area">Diện tích (ha)</Label>
-                    <Input id="area" name="area" type="number" step="0.1" data-testid="input-season-area" />
+                    <Input id="area" name="area" type="number" step="0.1" value={formArea} onChange={(e) => setFormArea(e.target.value)} data-testid="input-season-area" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="estimatedYield">Sản lượng ước tính (tấn)</Label>
-                    <Input id="estimatedYield" name="estimatedYield" type="number" step="0.1" data-testid="input-season-yield" />
+                    <Label htmlFor="estimatedYield">Sản lượng ước tính (tấn/ha)</Label>
+                    <Input id="estimatedYield" name="estimatedYield" type="number" step="0.1" value={formEstimatedYield} onChange={(e) => setFormEstimatedYield(e.target.value)} data-testid="input-season-yield" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="cultivationZone">Vùng canh tác</Label>
-                  <Input id="cultivationZone" name="cultivationZone" placeholder="VD: Khu A, Cánh đồng 3..." data-testid="input-season-zone" />
+                  <Input id="cultivationZone" name="cultivationZone" placeholder="VD: Khu A, Cánh đồng 3..." value={formCultivationZone} onChange={(e) => setFormCultivationZone(e.target.value)} data-testid="input-season-zone" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="notes">Ghi chú</Label>
-                  <Textarea id="notes" name="notes" data-testid="input-season-notes" />
+                  <Textarea id="notes" name="notes" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} data-testid="input-season-notes" />
                 </div>
+
+                {/* Template tasks editor */}
+                {currentTemplateTasks.length > 0 && (
+                  <div className="space-y-3 border rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold">Công việc từ mùa vụ mẫu ({currentTemplateTasks.length})</Label>
+                    </div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {currentTemplateTasks.map((task, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2 bg-muted/30 rounded-md">
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <Input
+                              value={task.title}
+                              onChange={(e) => updateTemplateTask(idx, "title", e.target.value)}
+                              className="h-7 text-xs"
+                              placeholder="Tên công việc"
+                            />
+                            <div className="flex gap-1">
+                              <Select value={task.stage} onValueChange={(v) => updateTemplateTask(idx, "stage", v)}>
+                                <SelectTrigger className="h-6 text-[10px] w-24"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="planting">Gieo trồng</SelectItem>
+                                  <SelectItem value="caring">Chăm bón</SelectItem>
+                                  <SelectItem value="harvesting">Thu hoạch</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Select value={task.priority} onValueChange={(v) => updateTemplateTask(idx, "priority", v)}>
+                                <SelectTrigger className="h-6 text-[10px] w-20"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="low">Thấp</SelectItem>
+                                  <SelectItem value="medium">TB</SelectItem>
+                                  <SelectItem value="high">Cao</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0"
+                            onClick={() => removeTemplateTask(idx)}
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-season">
                   {createMutation.isPending ? "Đang lưu..." : "Tạo mùa vụ"}
                 </Button>
@@ -225,6 +413,26 @@ export default function Seasons() {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">Từ ngày</Label>
+            <Input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="w-[140px] h-9"
+              data-testid="filter-season-from"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">Đến ngày</Label>
+            <Input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="w-[140px] h-9"
+              data-testid="filter-season-to"
+            />
+          </div>
         </div>
 
         {isLoading ? (
@@ -295,7 +503,7 @@ export default function Seasons() {
                           <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
                             {season.estimatedYield && (
                               <span className="flex items-center gap-1">
-                                <TrendingUp className="h-3 w-3" /> Sản lượng ước tính: {season.estimatedYield} tấn
+                                <TrendingUp className="h-3 w-3" /> Sản lượng ước tính: {season.estimatedYield} tấn/ha
                               </span>
                             )}
                             {season.cultivationZone && (

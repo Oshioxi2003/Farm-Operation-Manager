@@ -56,6 +56,7 @@ export const tasks = mysqlTable("tasks", {
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   proofImage: text("proof_image"),
+  harvestYield: float("harvest_yield"),
 });
 
 export const workLogs = mysqlTable("work_logs", {

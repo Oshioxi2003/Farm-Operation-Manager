@@ -4,12 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 import {
   CalendarDays, ClipboardList, AlertTriangle, CloudRain,
-  ArrowRight, CheckCircle2, Clock, Sprout,
+  ArrowRight, CheckCircle2, Clock, Sprout, Leaf, Sun, MapPin, TrendingUp,
 } from "lucide-react";
 import { Link } from "wouter";
-import type { Task, Alert, ClimateReading } from "@shared/schema";
+import type { Task, Alert, ClimateReading, Season, Crop } from "@shared/schema";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
@@ -41,6 +42,18 @@ const severityColors: Record<string, string> = {
   info: "bg-chart-1/10 text-chart-1 border-chart-1/20",
 };
 
+const stageLabels: Record<string, string> = {
+  planting: "Gieo trồng",
+  caring: "Chăm bón",
+  harvesting: "Thu hoạch",
+};
+
+const stageIcons: Record<string, typeof Sprout> = {
+  planting: Sprout,
+  caring: Leaf,
+  harvesting: Sun,
+};
+
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery<{
     activeSeasons: number;
@@ -60,6 +73,16 @@ export default function Dashboard() {
   const { data: climate } = useQuery<ClimateReading[]>({
     queryKey: ["/api/climate"],
   });
+
+  const { data: seasons } = useQuery<Season[]>({
+    queryKey: ["/api/seasons"],
+  });
+
+  const { data: crops } = useQuery<Crop[]>({
+    queryKey: ["/api/crops"],
+  });
+
+  const activeSeasons = seasons?.filter(s => s.status === "active") || [];
 
   const climateChartData = climate?.slice(0, 24).reverse().map((r, i) => ({
     time: `${i}h`,
@@ -86,7 +109,7 @@ export default function Dashboard() {
       <div className="p-4 md:p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Tổng quan</h1>
-          <p className="text-muted-foreground text-sm mt-1">Xin chào, Nguyễn Văn Minh. Tổng quan hoạt động hôm nay.</p>
+          <p className="text-muted-foreground text-sm mt-1">Xin chào. Tổng quan hoạt động hôm nay.</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -110,6 +133,76 @@ export default function Dashboard() {
               </Card>
             ))}
         </div>
+
+        {/* Active Seasons Section */}
+        {activeSeasons.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-chart-2" />
+                Mùa vụ đang diễn ra
+              </CardTitle>
+              <Link href="/seasons">
+                <Button variant="ghost" size="sm" data-testid="link-view-seasons">
+                  Xem tất cả <ArrowRight className="ml-1 h-3 w-3" />
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {activeSeasons.map((season) => {
+                  const crop = crops?.find(c => c.id === season.cropId);
+                  const StageIcon = season.currentStage ? stageIcons[season.currentStage] : CalendarDays;
+                  return (
+                    <div
+                      key={season.id}
+                      className="rounded-lg border p-3 space-y-2 hover-elevate"
+                      data-testid={`active-season-${season.id}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                          <StageIcon className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{season.name}</p>
+                          {crop && <p className="text-xs text-muted-foreground">{crop.name} {crop.variety ? `(${crop.variety})` : ""}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {season.currentStage && (
+                          <Badge variant="outline" className="text-[10px] no-default-active-elevate">
+                            {stageLabels[season.currentStage]}
+                          </Badge>
+                        )}
+                        <Badge variant="default" className="text-[10px] no-default-active-elevate">
+                          {season.progress || 0}%
+                        </Badge>
+                      </div>
+                      <Progress value={season.progress || 0} className="h-1.5" />
+                      <div className="flex gap-3 text-[10px] text-muted-foreground flex-wrap">
+                        {season.area && <span>Diện tích: {season.area} {season.areaUnit}</span>}
+                        {season.startDate && <span>Bắt đầu: {String(season.startDate)}</span>}
+                        {season.endDate && <span>Kết thúc: {String(season.endDate)}</span>}
+                      </div>
+                      <div className="flex gap-3 text-[10px] text-muted-foreground flex-wrap">
+                        {season.estimatedYield && (
+                          <span className="flex items-center gap-0.5">
+                            <TrendingUp className="h-2.5 w-2.5" /> {season.estimatedYield} tấn/ha
+                          </span>
+                        )}
+                        {season.cultivationZone && (
+                          <span className="flex items-center gap-0.5">
+                            <MapPin className="h-2.5 w-2.5" /> {season.cultivationZone}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">

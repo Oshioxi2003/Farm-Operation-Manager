@@ -207,6 +207,12 @@ export async function registerRoutes(
     res.json(seasons);
   });
 
+  app.get("/api/seasons/active", requireAuth, async (_req, res) => {
+    const allSeasons = await storage.getSeasons();
+    const active = allSeasons.filter(s => s.status === "active");
+    res.json(active);
+  });
+
   app.get("/api/seasons/:id", requireAuth, async (req, res) => {
     const season = await storage.getSeason(req.params.id);
     if (!season) return res.status(404).json({ message: "Không tìm thấy" });
@@ -214,7 +220,10 @@ export async function registerRoutes(
   });
 
   app.post("/api/seasons", requireManager, async (req, res) => {
-    const parsed = insertSeasonSchema.safeParse(req.body);
+    const body = { ...req.body };
+    if (body.startDate && typeof body.startDate === "string") body.startDate = new Date(body.startDate);
+    if (body.endDate && typeof body.endDate === "string") body.endDate = new Date(body.endDate);
+    const parsed = insertSeasonSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const season = await storage.createSeason(parsed.data);
     res.json(season);
@@ -230,7 +239,10 @@ export async function registerRoutes(
   });
 
   app.patch("/api/seasons/:id", requireManager, async (req, res) => {
-    const parsed = insertSeasonSchema.partial().safeParse(req.body);
+    const body = { ...req.body };
+    if (body.startDate && typeof body.startDate === "string") body.startDate = new Date(body.startDate);
+    if (body.endDate && typeof body.endDate === "string") body.endDate = new Date(body.endDate);
+    const parsed = insertSeasonSchema.partial().safeParse(body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const season = await storage.updateSeason(req.params.id, parsed.data);
     if (!season) return res.status(404).json({ message: "Không tìm thấy" });
@@ -292,10 +304,11 @@ export async function registerRoutes(
     if (!existingTask) return res.status(404).json({ message: "Không tìm thấy" });
 
     if (req.user!.role === "farmer") {
-      // Farmer can update status and proofImage
+      // Farmer can update status, proofImage, and harvestYield
       const allowed: Record<string, unknown> = {};
       if (req.body.status) allowed.status = req.body.status;
       if (req.body.proofImage !== undefined) allowed.proofImage = req.body.proofImage;
+      if (req.body.harvestYield !== undefined) allowed.harvestYield = req.body.harvestYield;
       if (req.body.status === "done") {
         allowed.completedAt = new Date();
       }
@@ -413,9 +426,15 @@ export async function registerRoutes(
     res.json(txs);
   });
 
-  app.post("/api/supply-transactions", requireManager, async (req, res) => {
+  app.post("/api/supply-transactions", requireAuth, async (req, res) => {
     const parsed = insertSupplyTransactionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+    // Farmer can only create export (usage) transactions
+    if (req.user!.role === "farmer" && parsed.data.type !== "export") {
+      return res.status(403).json({ message: "Nông dân chỉ có thể sử dụng (xuất) vật tư" });
+    }
+
     const tx = await storage.createSupplyTransaction(parsed.data);
     res.json(tx);
   });
