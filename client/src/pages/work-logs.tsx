@@ -11,7 +11,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, BookOpen, Clock, Package, Image, CheckCircle2, CalendarDays } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, BookOpen, Clock, Package, Image, CheckCircle2, CalendarDays, Filter, X, Search } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,11 +26,30 @@ const stageLabels: Record<string, string> = {
 
 export default function WorkLogs() {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [filterSeason, setFilterSeason] = useState<string>("all");
   const [filterStage, setFilterStage] = useState<string>("all");
+  const [filterUser, setFilterUser] = useState<string>("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const { toast } = useToast();
+
+  // Đếm số bộ lọc đang áp dụng
+  const activeFilterCount = [
+    filterSeason, filterStage, filterUser,
+  ].filter(v => v !== "all").length
+    + (filterDateFrom ? 1 : 0)
+    + (filterDateTo ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setFilterSeason("all");
+    setFilterStage("all");
+    setFilterUser("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  };
+
   const { data: logs, isLoading } = useQuery<WorkLog[]>({ queryKey: ["/api/work-logs"] });
   const { data: seasons } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: tasks } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -64,6 +84,19 @@ export default function WorkLogs() {
 
   // Filter logs
   const filteredLogs = logs?.filter(log => {
+    // Lọc theo tìm kiếm text
+    if (search) {
+      const q = search.toLowerCase();
+      const user = users?.find(u => u.id === log.userId);
+      const task = tasks?.find(t => t.id === log.taskId);
+      const season = seasons?.find(s => s.id === log.seasonId);
+      const matchesContent = log.content.toLowerCase().includes(q);
+      const matchesUser = user?.fullName.toLowerCase().includes(q);
+      const matchesTask = task?.title.toLowerCase().includes(q);
+      const matchesSeason = season?.name.toLowerCase().includes(q);
+      if (!matchesContent && !matchesUser && !matchesTask && !matchesSeason) return false;
+    }
+
     // Filter by season
     if (filterSeason !== "all" && log.seasonId !== filterSeason) return false;
 
@@ -72,6 +105,9 @@ export default function WorkLogs() {
       const task = tasks?.find(t => t.id === log.taskId);
       if (!task || task.stage !== filterStage) return false;
     }
+
+    // Filter by user
+    if (filterUser !== "all" && log.userId !== filterUser) return false;
 
     // Filter by date range
     if (filterDateFrom || filterDateTo) {
@@ -164,48 +200,167 @@ export default function WorkLogs() {
           </Dialog>
         </div>
 
-        {/* Filter bar */}
-        <div className="flex gap-3 flex-wrap">
-          <Select value={filterSeason} onValueChange={setFilterSeason}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-log-season">
-              <SelectValue placeholder="Mùa vụ" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả mùa vụ</SelectItem>
-              {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterStage} onValueChange={setFilterStage}>
-            <SelectTrigger className="w-[160px]" data-testid="filter-log-stage">
-              <SelectValue placeholder="Giai đoạn" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả giai đoạn</SelectItem>
-              <SelectItem value="planting">Gieo trồng</SelectItem>
-              <SelectItem value="caring">Chăm bón</SelectItem>
-              <SelectItem value="harvesting">Thu hoạch</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-1.5">
-            <Label className="text-xs text-muted-foreground whitespace-nowrap">Từ ngày</Label>
+        {/* Search + Filter bar */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative max-w-sm flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              type="date"
-              value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-              className="w-[140px] h-9"
-              data-testid="filter-log-from"
+              placeholder="Tìm kiếm nhật ký..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              data-testid="input-search-logs"
             />
           </div>
-          <div className="flex items-center gap-1.5">
-            <Label className="text-xs text-muted-foreground whitespace-nowrap">Đến ngày</Label>
-            <Input
-              type="date"
-              value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
-              className="w-[140px] h-9"
-              data-testid="filter-log-to"
-            />
-          </div>
+
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="relative shrink-0"
+                data-testid="button-filter-logs"
+              >
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="start">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-sm">Bộ lọc</h4>
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={clearAllFilters}
+                    >
+                      <X className="mr-1 h-3 w-3" /> Xóa bộ lọc
+                    </Button>
+                  )}
+                </div>
+
+                {/* Mùa vụ */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Mùa vụ</Label>
+                  <Select value={filterSeason} onValueChange={setFilterSeason}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-log-season">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả mùa vụ</SelectItem>
+                      {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Giai đoạn */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Giai đoạn</Label>
+                  <Select value={filterStage} onValueChange={setFilterStage}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-log-stage">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả giai đoạn</SelectItem>
+                      <SelectItem value="planting">Gieo trồng</SelectItem>
+                      <SelectItem value="caring">Chăm bón</SelectItem>
+                      <SelectItem value="harvesting">Thu hoạch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Người thực hiện */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Người thực hiện</Label>
+                  <Select value={filterUser} onValueChange={setFilterUser}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      {users?.map(u => <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Ngày */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Từ ngày</Label>
+                    <Input
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={(e) => setFilterDateFrom(e.target.value)}
+                      className="h-8 text-xs"
+                      data-testid="filter-log-from"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Đến ngày</Label>
+                    <Input
+                      type="date"
+                      value={filterDateTo}
+                      onChange={(e) => setFilterDateTo(e.target.value)}
+                      className="h-8 text-xs"
+                      data-testid="filter-log-to"
+                    />
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Badge bộ lọc */}
+          {activeFilterCount > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {filterSeason !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  {seasons?.find(s => s.id === filterSeason)?.name || "Mùa vụ"}
+                  <button onClick={() => setFilterSeason("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterStage !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  {stageLabels[filterStage]}
+                  <button onClick={() => setFilterStage("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterUser !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  {users?.find(u => u.id === filterUser)?.fullName || "Người dùng"}
+                  <button onClick={() => setFilterUser("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterDateFrom && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  Từ: {filterDateFrom}
+                  <button onClick={() => setFilterDateFrom("")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterDateTo && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  Đến: {filterDateTo}
+                  <button onClick={() => setFilterDateTo("")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         {isLoading ? (

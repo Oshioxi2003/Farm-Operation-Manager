@@ -17,9 +17,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Plus, ClipboardList, CheckCircle2, Clock, AlertTriangle,
   Play, MoreVertical, Pencil, Trash2, Camera, Image, Weight,
+  Filter, X, Search,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -57,11 +59,26 @@ export default function Tasks() {
   const [completeTaskId, setCompleteTaskId] = useState<string | null>(null);
   const [proofUrl, setProofUrl] = useState("");
   const [harvestYield, setHarvestYield] = useState("");
+  const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [tab, setTab] = useState("all");
   const [filterSeason, setFilterSeason] = useState<string>("all");
   const [filterCrop, setFilterCrop] = useState<string>("all");
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterStage, setFilterStage] = useState<string>("all");
   const { toast } = useToast();
   const { isManager, isFarmer, user: authUser } = useAuth();
+
+  // Đếm số bộ lọc đang áp dụng
+  const activeFilterCount = [filterSeason, filterCrop, filterPriority, filterStage]
+    .filter(v => v !== "all").length;
+
+  const clearAllFilters = () => {
+    setFilterSeason("all");
+    setFilterCrop("all");
+    setFilterPriority("all");
+    setFilterStage("all");
+  };
 
   const { data: tasks, isLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: seasons } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
@@ -122,12 +139,25 @@ export default function Tasks() {
 
   // Apply filters
   const filteredTasks = tasks?.filter(t => {
+    // Lọc theo tìm kiếm text
+    if (search) {
+      const q = search.toLowerCase();
+      const assignee = users?.find(u => u.id === t.assigneeId);
+      const season = seasons?.find(s => s.id === t.seasonId);
+      const matchesTitle = t.title.toLowerCase().includes(q);
+      const matchesDesc = t.description?.toLowerCase().includes(q);
+      const matchesAssignee = assignee?.fullName.toLowerCase().includes(q);
+      const matchesSeason = season?.name.toLowerCase().includes(q);
+      if (!matchesTitle && !matchesDesc && !matchesAssignee && !matchesSeason) return false;
+    }
     if (tab !== "all" && t.status !== tab) return false;
     if (filterSeason !== "all" && t.seasonId !== filterSeason) return false;
     if (filterCrop !== "all") {
       const season = seasons?.find(s => s.id === t.seasonId);
       if (!season || season.cropId !== filterCrop) return false;
     }
+    if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+    if (filterStage !== "all" && t.stage !== filterStage) return false;
     return true;
   });
 
@@ -310,26 +340,151 @@ export default function Tasks() {
           </Dialog>
         </div>
 
-        {/* Filter bar */}
-        <div className="flex gap-3 flex-wrap">
-          <Select value={filterSeason} onValueChange={setFilterSeason}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-task-season">
-              <SelectValue placeholder="Mùa vụ" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả mùa vụ</SelectItem>
-              {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterCrop} onValueChange={setFilterCrop}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-task-crop">
-              <SelectValue placeholder="Cây trồng" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả cây trồng</SelectItem>
-              {crops?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        {/* Search + Filter bar */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative max-w-sm flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Tìm kiếm công việc..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              data-testid="input-search-tasks"
+            />
+          </div>
+
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="relative shrink-0"
+                data-testid="button-filter-tasks"
+              >
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="start">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-sm">Bộ lọc</h4>
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={clearAllFilters}
+                    >
+                      <X className="mr-1 h-3 w-3" /> Xóa bộ lọc
+                    </Button>
+                  )}
+                </div>
+
+                {/* Mùa vụ */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Mùa vụ</Label>
+                  <Select value={filterSeason} onValueChange={setFilterSeason}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-task-season">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả mùa vụ</SelectItem>
+                      {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Cây trồng */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Cây trồng</Label>
+                  <Select value={filterCrop} onValueChange={setFilterCrop}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-task-crop">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả cây trồng</SelectItem>
+                      {crops?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Ưu tiên */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Ưu tiên</Label>
+                  <Select value={filterPriority} onValueChange={setFilterPriority}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      <SelectItem value="high">Cao</SelectItem>
+                      <SelectItem value="medium">Trung bình</SelectItem>
+                      <SelectItem value="low">Thấp</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Giai đoạn */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Giai đoạn</Label>
+                  <Select value={filterStage} onValueChange={setFilterStage}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả giai đoạn</SelectItem>
+                      <SelectItem value="planting">Gieo trồng</SelectItem>
+                      <SelectItem value="caring">Chăm bón</SelectItem>
+                      <SelectItem value="harvesting">Thu hoạch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Hiển thị badge bộ lọc đang áp dụng */}
+          {activeFilterCount > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {filterSeason !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  {seasons?.find(s => s.id === filterSeason)?.name || "Mùa vụ"}
+                  <button onClick={() => setFilterSeason("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterCrop !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  {crops?.find(c => c.id === filterCrop)?.name || "Cây trồng"}
+                  <button onClick={() => setFilterCrop("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterPriority !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  {priorityConfig[filterPriority]?.label || filterPriority}
+                  <button onClick={() => setFilterPriority("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterStage !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  {stageLabels[filterStage]}
+                  <button onClick={() => setFilterStage("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
