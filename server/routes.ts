@@ -16,9 +16,9 @@ import {
   insertCropSchema, insertSeasonSchema, insertTaskSchema,
   insertWorkLogSchema, insertSupplySchema, insertSupplyTransactionSchema,
   insertClimateReadingSchema, insertAlertSchema, insertUserSchema,
-  workLogs,
+  workLogs, notifications,
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db } from "./db";
 
 export async function registerRoutes(
@@ -29,6 +29,50 @@ export async function registerRoutes(
   // ── Global middleware ──
   app.use(cookieParser());
   app.use(extractUser);
+
+  // ── Helper: check & notify overdue tasks ──
+  async function checkOverdueTasks() {
+    try {
+      const allTasks = await storage.getTasks();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (const task of allTasks) {
+        // Skip tasks already done or already marked overdue
+        if (task.status === "done" || task.status === "overdue") continue;
+        if (!task.dueDate) continue;
+
+        const due = new Date(task.dueDate);
+        due.setHours(0, 0, 0, 0);
+
+        if (due < today) {
+          // Mark task as overdue
+          await storage.updateTask(task.id, { status: "overdue" } as any);
+
+          // Send notification to assigned user (if any and not already notified)
+          if (task.assigneeId) {
+            // Check if a notification for this overdue task was already sent
+            const existingNotifs = await storage.getNotifications(task.assigneeId);
+            const alreadyNotified = existingNotifs.some(
+              n => n.relatedId === task.id && n.title === "Công việc quá hạn"
+            );
+
+            if (!alreadyNotified) {
+              await storage.createNotification({
+                targetUserId: task.assigneeId,
+                title: "Công việc quá hạn",
+                message: `Công việc "${task.title}" đã quá hạn (hạn: ${String(task.dueDate).split("T")[0]})`,
+                isRead: false,
+                relatedId: task.id,
+              });
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking overdue tasks:", error);
+    }
+  }
 
   // ── Serve uploaded media files ──
   const mediaDir = path.resolve(process.cwd(), "media");
@@ -142,6 +186,8 @@ export async function registerRoutes(
   // ══════════════════════════════════════════
 
   app.get("/api/dashboard/stats", requireAuth, async (_req, res) => {
+    // Check for overdue tasks on dashboard access
+    await checkOverdueTasks();
     const stats = await storage.getDashboardStats();
     res.json(stats);
   });
@@ -300,6 +346,8 @@ export async function registerRoutes(
 
   // ── TASKS ── (farmer can update status, manager can create/delete)
   app.get("/api/tasks", requireAuth, async (_req, res) => {
+    // Check for overdue tasks on task list access
+    await checkOverdueTasks();
     const tasks = await storage.getTasks();
     res.json(tasks);
   });
