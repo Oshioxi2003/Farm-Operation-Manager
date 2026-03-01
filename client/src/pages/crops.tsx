@@ -16,8 +16,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Sprout, Thermometer, Droplets, Search, Pencil, Trash2, Upload, Link, ImageIcon } from "lucide-react";
-import { useState, useRef } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Plus, Sprout, Thermometer, Droplets, Search, Pencil, Trash2, Upload, Link, ImageIcon, Filter, X } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Crop } from "@shared/schema";
@@ -132,10 +136,33 @@ export default function Crops() {
   const [editCrop, setEditCrop] = useState<Crop | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [editImageUrl, setEditImageUrl] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterVariety, setFilterVariety] = useState<string>("all");
+  const [filterGrowthRange, setFilterGrowthRange] = useState<string>("all");
+  const [filterHasTemp, setFilterHasTemp] = useState<string>("all");
+  const [filterHasCare, setFilterHasCare] = useState<string>("all");
   const { toast } = useToast();
   const { isManager } = useAuth();
 
   const { data: crops, isLoading } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
+
+  // Lấy danh sách giống duy nhất từ dữ liệu
+  const varieties = useMemo(() => {
+    if (!crops) return [];
+    const set = new Set(crops.map(c => c.variety).filter(Boolean) as string[]);
+    return Array.from(set).sort();
+  }, [crops]);
+
+  // Đếm số bộ lọc đang áp dụng
+  const activeFilterCount = [filterVariety, filterGrowthRange, filterHasTemp, filterHasCare]
+    .filter(v => v !== "all").length;
+
+  const clearAllFilters = () => {
+    setFilterVariety("all");
+    setFilterGrowthRange("all");
+    setFilterHasTemp("all");
+    setFilterHasCare("all");
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -180,10 +207,37 @@ export default function Crops() {
     },
   });
 
-  const filtered = crops?.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.variety?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = crops?.filter(c => {
+    // Lọc theo tìm kiếm text
+    const matchesSearch = search === "" ||
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.variety?.toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+
+    // Lọc theo giống
+    if (filterVariety !== "all" && c.variety !== filterVariety) return false;
+
+    // Lọc theo thời gian sinh trưởng
+    if (filterGrowthRange !== "all") {
+      const gd = c.growthDuration;
+      if (filterGrowthRange === "none" && gd) return false;
+      if (filterGrowthRange === "none" && !gd) { /* pass */ }
+      else if (filterGrowthRange === "lt30" && (!gd || gd >= 30)) return false;
+      else if (filterGrowthRange === "30to60" && (!gd || gd < 30 || gd > 60)) return false;
+      else if (filterGrowthRange === "60to90" && (!gd || gd < 60 || gd > 90)) return false;
+      else if (filterGrowthRange === "gt90" && (!gd || gd <= 90)) return false;
+    }
+
+    // Lọc theo có thông tin nhiệt độ
+    if (filterHasTemp === "yes" && !c.optimalTemp) return false;
+    if (filterHasTemp === "no" && c.optimalTemp) return false;
+
+    // Lọc theo có hướng dẫn chăm sóc
+    if (filterHasCare === "yes" && !c.careInstructions) return false;
+    if (filterHasCare === "no" && c.careInstructions) return false;
+
+    return true;
+  });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -293,15 +347,160 @@ export default function Crops() {
           </Dialog>
         </div>
 
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Tìm kiếm cây trồng..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-crops"
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative max-w-sm flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Tìm kiếm cây trồng..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              data-testid="input-search-crops"
+            />
+          </div>
+
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="relative shrink-0"
+                data-testid="button-filter-crops"
+              >
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="start">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-sm">Bộ lọc</h4>
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={clearAllFilters}
+                    >
+                      <X className="mr-1 h-3 w-3" /> Xóa bộ lọc
+                    </Button>
+                  )}
+                </div>
+
+                {/* Lọc theo giống */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Giống cây</Label>
+                  <Select value={filterVariety} onValueChange={setFilterVariety}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      {varieties.map(v => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Lọc theo thời gian sinh trưởng */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Thời gian sinh trưởng</Label>
+                  <Select value={filterGrowthRange} onValueChange={setFilterGrowthRange}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      <SelectItem value="lt30">&lt; 30 ngày</SelectItem>
+                      <SelectItem value="30to60">30 - 60 ngày</SelectItem>
+                      <SelectItem value="60to90">60 - 90 ngày</SelectItem>
+                      <SelectItem value="gt90">&gt; 90 ngày</SelectItem>
+                      <SelectItem value="none">Chưa có thông tin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Lọc theo nhiệt độ */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Nhiệt độ lý tưởng</Label>
+                  <Select value={filterHasTemp} onValueChange={setFilterHasTemp}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      <SelectItem value="yes">Có thông tin</SelectItem>
+                      <SelectItem value="no">Chưa có thông tin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Lọc theo hướng dẫn chăm sóc */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Hướng dẫn chăm sóc</Label>
+                  <Select value={filterHasCare} onValueChange={setFilterHasCare}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Tất cả" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      <SelectItem value="yes">Có hướng dẫn</SelectItem>
+                      <SelectItem value="no">Chưa có hướng dẫn</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Hiển thị badge bộ lọc đang áp dụng */}
+          {activeFilterCount > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {filterVariety !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  Giống: {filterVariety}
+                  <button onClick={() => setFilterVariety("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterGrowthRange !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  Sinh trưởng: {{
+                    lt30: "< 30 ngày",
+                    "30to60": "30-60 ngày",
+                    "60to90": "60-90 ngày",
+                    gt90: "> 90 ngày",
+                    none: "Chưa có",
+                  }[filterGrowthRange]}
+                  <button onClick={() => setFilterGrowthRange("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterHasTemp !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  Nhiệt độ: {filterHasTemp === "yes" ? "Có" : "Không"}
+                  <button onClick={() => setFilterHasTemp("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterHasCare !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  Chăm sóc: {filterHasCare === "yes" ? "Có" : "Không"}
+                  <button onClick={() => setFilterHasCare("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         {isLoading ? (

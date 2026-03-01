@@ -8,15 +8,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Sprout, Leaf, Sun, CheckCircle2, Circle, ArrowRight, Image } from "lucide-react";
+import { Sprout, Leaf, Sun, CheckCircle2, Circle, ArrowRight, Image, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
-import type { Season, Crop, Task } from "@shared/schema";
+import type { Season, Crop, Task, Supply } from "@shared/schema";
+
+interface SupplyUsage {
+  supplyId: string;
+  quantity: number;
+}
 
 const stages = [
   { key: "planting", label: "Gieo trồng", icon: Sprout, color: "text-chart-2" },
@@ -37,6 +43,8 @@ export default function SeasonProgress() {
   const { data: seasons, isLoading } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: crops } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
   const { data: allTasks } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
+  const { data: supplies } = useQuery<Supply[]>({ queryKey: ["/api/supplies"] });
+  const [supplyUsages, setSupplyUsages] = useState<SupplyUsage[]>([]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
@@ -55,7 +63,20 @@ export default function SeasonProgress() {
     setPendingSeason(season);
     setDiaryContent("");
     setDiaryImage("");
+    setSupplyUsages([]);
     setDiaryOpen(true);
+  };
+
+  const addSupplyUsage = () => {
+    setSupplyUsages(prev => [...prev, { supplyId: "", quantity: 0 }]);
+  };
+
+  const updateSupplyUsage = (index: number, field: keyof SupplyUsage, value: string | number) => {
+    setSupplyUsages(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
+  };
+
+  const removeSupplyUsage = (index: number) => {
+    setSupplyUsages(prev => prev.filter((_, i) => i !== index));
   };
 
   // Actually advance stage + create work log
@@ -65,12 +86,33 @@ export default function SeasonProgress() {
     const currentStageName = stages[idx]?.label || pendingSeason.currentStage;
 
     try {
+      // Get tasks for this season
+      const seasonTasks = allTasks?.filter(t => t.seasonId === pendingSeason.id) || [];
+      const currentStageKey = stages[idx]?.key;
+
+      // Mark all current stage tasks as "done"
+      const currentStageTasks = seasonTasks.filter(t => t.stage === currentStageKey && t.status !== "done");
+      for (const task of currentStageTasks) {
+        await apiRequest("PATCH", `/api/tasks/${task.id}`, { status: "done" });
+      }
+
       // Advance the season stage
       if (idx < 2) {
         const nextStage = stages[idx + 1].key as "planting" | "caring" | "harvesting";
         const progress = Math.min(100, (pendingSeason.progress || 0) + 20);
         await updateMutation.mutateAsync({ id: pendingSeason.id, data: { currentStage: nextStage, progress, status: "active" } });
+
+        // Mark next stage tasks as "doing"
+        const nextStageTasks = seasonTasks.filter(t => t.stage === nextStage && t.status === "todo");
+        for (const task of nextStageTasks) {
+          await apiRequest("PATCH", `/api/tasks/${task.id}`, { status: "doing" });
+        }
       } else {
+        // Completing season - mark ALL remaining tasks as done
+        const remainingTasks = seasonTasks.filter(t => t.status !== "done");
+        for (const task of remainingTasks) {
+          await apiRequest("PATCH", `/api/tasks/${task.id}`, { status: "done" });
+        }
         await updateMutation.mutateAsync({ id: pendingSeason.id, data: { status: "completed", progress: 100 } });
       }
 
@@ -94,8 +136,33 @@ export default function SeasonProgress() {
         });
       }
 
+      // Create supply transactions and log supply usage
+      const validUsages = supplyUsages.filter(u => u.supplyId && u.quantity > 0);
+      for (const usage of validUsages) {
+        const supply = supplies?.find(s => s.id === usage.supplyId);
+        // Create export transaction to deduct from inventory
+        await apiRequest("POST", "/api/supply-transactions", {
+          supplyId: usage.supplyId,
+          seasonId: pendingSeason.id,
+          type: "export",
+          quantity: usage.quantity,
+          note: `Sử dụng cho giai đoạn ${currentStageName} - ${pendingSeason.name}`,
+        });
+        // Create work log entry for supply usage
+        await apiRequest("POST", "/api/work-logs", {
+          content: `📦 Sử dụng vật tư: ${supply?.name || ""} - ${usage.quantity} ${supply?.unit || ""}`,
+          seasonId: pendingSeason.id,
+          userId: user?.id || null,
+          supplyId: usage.supplyId,
+          supplyQuantity: usage.quantity,
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
-      toast({ title: "Thành công", description: `Đã chuyển giai đoạn và ghi nhật ký` });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supply-transactions"] });
+      toast({ title: "Thành công", description: `Đã chuyển giai đoạn và ghi nhật ký${validUsages.length > 0 ? ` (đã trừ ${validUsages.length} vật tư)` : ""}` });
     } catch {
       toast({ title: "Lỗi", description: "Không thể cập nhật", variant: "destructive" });
     }
@@ -280,6 +347,62 @@ export default function SeasonProgress() {
                 />
               )}
             </div>
+
+            {/* Supply usage section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Vật tư sử dụng</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addSupplyUsage} className="h-7 text-xs">
+                  <Plus className="mr-1 h-3 w-3" /> Thêm vật tư
+                </Button>
+              </div>
+              {supplyUsages.length > 0 ? (
+                <div className="space-y-2">
+                  {supplyUsages.map((usage, index) => {
+                    const selectedSupply = supplies?.find(s => s.id === usage.supplyId);
+                    return (
+                      <div key={index} className="flex items-center gap-2 p-2 rounded-md bg-muted/30">
+                        <div className="flex-1">
+                          <Select value={usage.supplyId} onValueChange={(v) => updateSupplyUsage(index, "supplyId", v)}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Chọn vật tư..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {supplies?.filter(s => s.currentStock > 0).map(s => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name} (tồn: {s.currentStock} {s.unit})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="w-24">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={selectedSupply?.currentStock || 999}
+                            step={0.1}
+                            placeholder="SL"
+                            className="h-8 text-xs"
+                            value={usage.quantity || ""}
+                            onChange={(e) => updateSupplyUsage(index, "quantity", parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                        {selectedSupply && (
+                          <span className="text-[10px] text-muted-foreground w-8">{selectedSupply.unit}</span>
+                        )}
+                        <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => removeSupplyUsage(index)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Chưa có vật tư nào được chọn</p>
+              )}
+            </div>
+
             <Button
               className="w-full"
               onClick={confirmAdvance}

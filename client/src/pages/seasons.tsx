@@ -12,17 +12,22 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import {
   Plus, CalendarDays, Sprout, Leaf, Sun, Copy, ChevronDown,
-  Clock, Play, CheckCircle2, AlertTriangle, MapPin, TrendingUp, Trash2,
+  Clock, Play, CheckCircle2, AlertTriangle, MapPin, TrendingUp, Trash2, Pencil,
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Season, Crop, Task } from "@shared/schema";
+import type { Season, Crop, Task, User } from "@shared/schema";
 import { useAuth } from "@/lib/auth-context";
 
 const statusLabels: Record<string, string> = {
@@ -61,6 +66,8 @@ interface TemplateTask {
   description: string;
   stage: string;
   priority: string;
+  dueDate: string;
+  assigneeId: string;
 }
 
 export default function Seasons() {
@@ -72,6 +79,7 @@ export default function Seasons() {
   const [expandedSeason, setExpandedSeason] = useState<string | null>(null);
   const [templateSeasonId, setTemplateSeasonId] = useState<string>("");
   const [templateTasks, setTemplateTasks] = useState<TemplateTask[]>([]);
+  const [detailTaskIndex, setDetailTaskIndex] = useState<number | null>(null);
   // Controlled form fields
   const [formName, setFormName] = useState("");
   const [formCropId, setFormCropId] = useState("");
@@ -86,6 +94,8 @@ export default function Seasons() {
 
   const { data: seasons, isLoading } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: crops } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
+  const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
+  const { data: allTasks } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
 
   const { data: seasonTasks } = useQuery<Task[]>({
     queryKey: ["/api/tasks/season", expandedSeason],
@@ -134,10 +144,24 @@ export default function Seasons() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/seasons/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({ title: "Thành công", description: "Đã xóa mùa vụ" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
+    },
+  });
+
   const resetForm = () => {
     setFormName(""); setFormCropId(""); setFormStartDate(""); setFormEndDate("");
     setFormArea(""); setFormEstimatedYield(""); setFormCultivationZone(""); setFormNotes("");
-    setTemplateSeasonId(""); setTemplateTasks([]);
+    setTemplateSeasonId(""); setTemplateTasks([]); setDetailTaskIndex(null);
   };
 
   const handleTemplateChange = (seasonId: string) => {
@@ -164,11 +188,13 @@ export default function Seasons() {
   // When template tasks load, populate the editable list
   const currentTemplateTasks = templateSeasonId && templateSeasonTasks && templateTasks.length === 0 && templateSeasonTasks.length > 0
     ? templateSeasonTasks.map(t => ({
-        title: t.title,
-        description: t.description || "",
-        stage: t.stage || "planting",
-        priority: t.priority || "medium",
-      }))
+      title: t.title,
+      description: t.description || "",
+      stage: t.stage || "planting",
+      priority: t.priority || "medium",
+      dueDate: t.dueDate ? String(t.dueDate).split("T")[0] : "",
+      assigneeId: t.assigneeId || "",
+    }))
     : templateTasks;
 
   if (templateSeasonId && templateSeasonTasks && templateTasks.length === 0 && templateSeasonTasks.length > 0) {
@@ -179,6 +205,8 @@ export default function Seasons() {
         description: t.description || "",
         stage: t.stage || "planting",
         priority: t.priority || "medium",
+        dueDate: t.dueDate ? String(t.dueDate).split("T")[0] : "",
+        assigneeId: t.assigneeId || "",
       })));
     }, 0);
   }
@@ -214,6 +242,8 @@ export default function Seasons() {
           stage: task.stage,
           priority: task.priority,
           status: "todo",
+          dueDate: task.dueDate ? new Date(task.dueDate) : null,
+          assigneeId: task.assigneeId || null,
         });
       }
 
@@ -347,7 +377,7 @@ export default function Seasons() {
                               className="h-7 text-xs"
                               placeholder="Tên công việc"
                             />
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 flex-wrap">
                               <Select value={task.stage} onValueChange={(v) => updateTemplateTask(idx, "stage", v)}>
                                 <SelectTrigger className="h-6 text-[10px] w-24"><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -364,17 +394,48 @@ export default function Seasons() {
                                   <SelectItem value="high">Cao</SelectItem>
                                 </SelectContent>
                               </Select>
+                              <Input
+                                type="date"
+                                value={task.dueDate}
+                                onChange={(e) => updateTemplateTask(idx, "dueDate", e.target.value)}
+                                className="h-6 text-[10px] w-[120px]"
+                                placeholder="Hạn"
+                                title="Hạn chót"
+                              />
+                              <Select value={task.assigneeId || "unassigned"} onValueChange={(v) => updateTemplateTask(idx, "assigneeId", v === "unassigned" ? "" : v)}>
+                                <SelectTrigger className="h-6 text-[10px] w-28" title="Phân công">
+                                  <SelectValue placeholder="Phân công" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unassigned">-- Chưa phân công --</SelectItem>
+                                  {users?.map(u => (
+                                    <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0"
-                            onClick={() => removeTemplateTask(idx)}
-                          >
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => setDetailTaskIndex(idx)}
+                              title="Xem chi tiết"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => removeTemplateTask(idx)}
+                            >
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -385,6 +446,88 @@ export default function Seasons() {
                   {createMutation.isPending ? "Đang lưu..." : "Tạo mùa vụ"}
                 </Button>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Detail/edit dialog for template task */}
+          <Dialog open={detailTaskIndex !== null} onOpenChange={(o) => { if (!o) setDetailTaskIndex(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Chi tiết công việc</DialogTitle>
+              </DialogHeader>
+              {detailTaskIndex !== null && currentTemplateTasks[detailTaskIndex] && (() => {
+                const task = currentTemplateTasks[detailTaskIndex];
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="detail-title">Tiêu đề *</Label>
+                      <Input
+                        id="detail-title"
+                        value={task.title}
+                        onChange={(e) => updateTemplateTask(detailTaskIndex, "title", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="detail-description">Mô tả</Label>
+                      <Textarea
+                        id="detail-description"
+                        value={task.description}
+                        onChange={(e) => updateTemplateTask(detailTaskIndex, "description", e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Giai đoạn</Label>
+                        <Select value={task.stage} onValueChange={(v) => updateTemplateTask(detailTaskIndex, "stage", v)}>
+                          <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="planting">Gieo trồng</SelectItem>
+                            <SelectItem value="caring">Chăm bón</SelectItem>
+                            <SelectItem value="harvesting">Thu hoạch</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Ưu tiên</Label>
+                        <Select value={task.priority} onValueChange={(v) => updateTemplateTask(detailTaskIndex, "priority", v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Thấp</SelectItem>
+                            <SelectItem value="medium">Trung bình</SelectItem>
+                            <SelectItem value="high">Cao</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="detail-dueDate">Hạn chót</Label>
+                        <Input
+                          id="detail-dueDate"
+                          type="date"
+                          value={task.dueDate}
+                          onChange={(e) => updateTemplateTask(detailTaskIndex, "dueDate", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Phân công</Label>
+                        <Select value={task.assigneeId || "unassigned"} onValueChange={(v) => updateTemplateTask(detailTaskIndex, "assigneeId", v === "unassigned" ? "" : v)}>
+                          <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">-- Chưa phân công --</SelectItem>
+                            {users?.map(u => (
+                              <SelectItem key={u.id} value={u.id}>{u.fullName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button type="button" className="w-full" onClick={() => setDetailTaskIndex(null)}>
+                      Đóng
+                    </Button>
+                  </div>
+                );
+              })()}
             </DialogContent>
           </Dialog>
         </div>
@@ -480,6 +623,37 @@ export default function Seasons() {
                               >
                                 <Copy className="mr-1 h-3 w-3" /> Sao chép
                               </Button>
+                            )}
+                            {isManager && season.status === "planning" && (!season.progress || season.progress === 0) && !(allTasks?.some(t => t.seasonId === season.id && t.status !== "todo")) && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                    data-testid={`button-delete-season-${season.id}`}
+                                  >
+                                    <Trash2 className="mr-1 h-3 w-3" /> Xóa
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Xóa mùa vụ</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Bạn có chắc muốn xóa mùa vụ <strong>"{season.name}"</strong>? Tất cả công việc liên quan cũng sẽ bị xóa. Hành động này không thể hoàn tác.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Hủy</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteMutation.mutate(season.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Xóa mùa vụ
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             )}
                           </div>
                         </div>

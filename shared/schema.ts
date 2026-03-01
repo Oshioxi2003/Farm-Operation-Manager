@@ -128,7 +128,9 @@ export const notifications = mysqlTable("notifications", {
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertCropSchema = createInsertSchema(crops).omit({ id: true });
 export const insertSeasonSchema = createInsertSchema(seasons).omit({ id: true });
-export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
+export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true }).extend({
+  dueDate: z.union([z.date(), z.string().transform(s => new Date(s))]).nullable().optional(),
+});
 export const insertWorkLogSchema = createInsertSchema(workLogs).omit({ id: true, createdAt: true });
 export const insertSupplySchema = createInsertSchema(supplies).omit({ id: true });
 export const insertSupplyTransactionSchema = createInsertSchema(supplyTransactions).omit({ id: true, createdAt: true });

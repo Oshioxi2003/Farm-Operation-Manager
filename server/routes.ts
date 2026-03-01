@@ -16,7 +16,10 @@ import {
   insertCropSchema, insertSeasonSchema, insertTaskSchema,
   insertWorkLogSchema, insertSupplySchema, insertSupplyTransactionSchema,
   insertClimateReadingSchema, insertAlertSchema, insertUserSchema,
+  workLogs,
 } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -265,6 +268,32 @@ export async function registerRoutes(
   });
 
   app.delete("/api/seasons/:id", requireManager, async (req, res) => {
+    const season = await storage.getSeason(req.params.id);
+    if (!season) return res.status(404).json({ message: "Không tìm thấy mùa vụ" });
+
+    // Only allow delete if season hasn't started
+    if (season.status !== "planning") {
+      return res.status(403).json({ message: "Chỉ có thể xóa mùa vụ ở trạng thái 'Kế hoạch'" });
+    }
+    if (season.progress && season.progress > 0) {
+      return res.status(403).json({ message: "Không thể xóa mùa vụ đã có tiến độ" });
+    }
+
+    // Check if any tasks have been started (not todo)
+    const seasonTasks = await storage.getTasksBySeason(req.params.id);
+    const activeTasks = seasonTasks.filter(t => t.status !== "todo");
+    if (activeTasks.length > 0) {
+      return res.status(403).json({ message: "Không thể xóa mùa vụ đã có công việc đang thực hiện" });
+    }
+
+    // Delete work logs referencing this season first (FK constraint)
+    await db.delete(workLogs).where(eq(workLogs.seasonId, req.params.id as string));
+
+    // Delete all associated todo tasks first
+    for (const task of seasonTasks) {
+      await storage.deleteTask(task.id);
+    }
+
     await storage.deleteSeason(req.params.id);
     res.json({ success: true });
   });
@@ -292,7 +321,9 @@ export async function registerRoutes(
   });
 
   app.post("/api/tasks", requireManager, async (req, res) => {
-    const parsed = insertTaskSchema.safeParse(req.body);
+    const body = { ...req.body };
+    if (body.dueDate && typeof body.dueDate === "string") body.dueDate = new Date(body.dueDate);
+    const parsed = insertTaskSchema.safeParse(body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const task = await storage.createTask(parsed.data);
 
@@ -344,7 +375,9 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Chỉ có thể chỉnh sửa công việc ở trạng thái 'Chờ làm'" });
     }
 
-    const parsed = insertTaskSchema.partial().safeParse(req.body);
+    const body = { ...req.body };
+    if (body.dueDate && typeof body.dueDate === "string") body.dueDate = new Date(body.dueDate);
+    const parsed = insertTaskSchema.partial().safeParse(body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
 
     // If assignee changed, send notification
