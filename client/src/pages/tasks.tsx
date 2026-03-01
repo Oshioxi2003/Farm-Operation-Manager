@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   Plus, ClipboardList, CheckCircle2, Clock, AlertTriangle,
   Play, MoreVertical, Pencil, Trash2, Camera, Image, Weight,
-  Filter, X, Search,
+  Filter, X, Search, CalendarDays,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -66,18 +66,24 @@ export default function Tasks() {
   const [filterCrop, setFilterCrop] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStage, setFilterStage] = useState<string>("all");
+  const [filterDateFrom, setFilterDateFrom] = useState<string>("");
+  const [filterDateTo, setFilterDateTo] = useState<string>("");
   const { toast } = useToast();
   const { isManager, isFarmer, user: authUser } = useAuth();
 
   // Đếm số bộ lọc đang áp dụng
   const activeFilterCount = [filterSeason, filterCrop, filterPriority, filterStage]
-    .filter(v => v !== "all").length;
+    .filter(v => v !== "all").length
+    + (filterDateFrom ? 1 : 0)
+    + (filterDateTo ? 1 : 0);
 
   const clearAllFilters = () => {
     setFilterSeason("all");
     setFilterCrop("all");
     setFilterPriority("all");
     setFilterStage("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
   };
 
   const { data: tasks, isLoading } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
@@ -158,6 +164,15 @@ export default function Tasks() {
     }
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
     if (filterStage !== "all" && t.stage !== filterStage) return false;
+    // Lọc theo thời gian (dueDate)
+    if (filterDateFrom && t.dueDate) {
+      if (String(t.dueDate) < filterDateFrom) return false;
+    }
+    if (filterDateTo && t.dueDate) {
+      if (String(t.dueDate) > filterDateTo) return false;
+    }
+    // Nếu có bộ lọc ngày nhưng task không có dueDate thì ẩn
+    if ((filterDateFrom || filterDateTo) && !t.dueDate) return false;
     return true;
   });
 
@@ -444,6 +459,33 @@ export default function Tasks() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Thời gian */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Thời gian (theo hạn)</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Từ ngày</Label>
+                      <Input
+                        type="date"
+                        value={filterDateFrom}
+                        onChange={(e) => setFilterDateFrom(e.target.value)}
+                        className="h-8 text-xs"
+                        data-testid="filter-task-date-from"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Đến ngày</Label>
+                      <Input
+                        type="date"
+                        value={filterDateTo}
+                        onChange={(e) => setFilterDateTo(e.target.value)}
+                        className="h-8 text-xs"
+                        data-testid="filter-task-date-to"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </PopoverContent>
           </Popover>
@@ -479,6 +521,19 @@ export default function Tasks() {
                 <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
                   {stageLabels[filterStage]}
                   <button onClick={() => setFilterStage("all")} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {(filterDateFrom || filterDateTo) && (
+                <Badge variant="secondary" className="text-xs gap-1 pl-2 pr-1 py-0.5">
+                  <CalendarDays className="h-3 w-3" />
+                  {filterDateFrom && filterDateTo
+                    ? `${filterDateFrom} → ${filterDateTo}`
+                    : filterDateFrom
+                      ? `Từ ${filterDateFrom}`
+                      : `Đến ${filterDateTo}`}
+                  <button onClick={() => { setFilterDateFrom(""); setFilterDateTo(""); }} className="ml-0.5 hover:text-destructive">
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>

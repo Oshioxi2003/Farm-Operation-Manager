@@ -113,6 +113,40 @@ export async function registerRoutes(
     }
   });
 
+  // ── Upload endpoint for work-log images ──
+  app.post("/api/upload/work-logs", requireAuth, async (req, res) => {
+    try {
+      const { base64, filename } = req.body;
+      if (!base64) return res.status(400).json({ message: "Thiếu dữ liệu ảnh" });
+
+      const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
+      let ext = "png";
+      let data = base64;
+      if (matches) {
+        ext = matches[1];
+        data = matches[2];
+      }
+
+      const uploadDir = path.resolve(process.cwd(), "media", "upload", "work-logs");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const safeName = filename
+        ? filename.replace(/[^a-zA-Z0-9._-]/g, "_")
+        : `${crypto.randomUUID()}.${ext}`;
+      const filePath = path.join(uploadDir, safeName);
+
+      fs.writeFileSync(filePath, Buffer.from(data, "base64"));
+
+      const url = `/media/upload/work-logs/${safeName}`;
+      res.json({ url });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      res.status(500).json({ message: "Lỗi tải ảnh lên" });
+    }
+  });
+
   // ══════════════════════════════════════════
   // AUTH ROUTES (public)
   // ══════════════════════════════════════════

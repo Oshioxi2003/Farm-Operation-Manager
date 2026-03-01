@@ -11,6 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -20,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import {
   Plus, Warehouse, AlertTriangle, PackagePlus, ArrowDownToLine, ArrowUpFromLine,
-  ChevronDown, PackageOpen,
+  ChevronDown, PackageOpen, Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -87,6 +92,21 @@ export default function Supplies() {
       setOpenUse(false);
       setUseSupplyId(null);
       toast({ title: "Thành công", description: "Đã cập nhật kho" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/supplies/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/supply-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({ title: "Thành công", description: "Đã xóa vật tư" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
     },
   });
 
@@ -322,6 +342,37 @@ export default function Supplies() {
                                 >
                                   <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                                 </Button>
+                                {isManager && supply.currentStock !== undefined && supply.currentStock <= 0 && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 text-xs text-destructive hover:text-destructive"
+                                        data-testid={`button-delete-supply-${supply.id}`}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Xóa vật tư</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Bạn có chắc muốn xóa vật tư <strong>{supply.name}</strong>? Hành động này không thể hoàn tác.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => deleteMutation.mutate(supply.id)}
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        >
+                                          Xóa
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
