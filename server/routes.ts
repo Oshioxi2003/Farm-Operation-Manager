@@ -16,7 +16,7 @@ import {
   insertCropSchema, insertSeasonSchema, insertTaskSchema,
   insertWorkLogSchema, insertSupplySchema, insertSupplyTransactionSchema,
   insertClimateReadingSchema, insertAlertSchema, insertUserSchema,
-  workLogs, notifications,
+  workLogs, notifications, supplyTransactions,
 } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "./db";
@@ -550,8 +550,16 @@ export async function registerRoutes(
   });
 
   app.delete("/api/supplies/:id", requireManager, async (req, res) => {
-    await storage.deleteSupply(req.params.id);
-    res.json({ success: true });
+    try {
+      // Delete related supply_transactions first (FK constraint)
+      await db.delete(supplyTransactions).where(eq(supplyTransactions.supplyId, req.params.id as string));
+      // Clear supplyId from work_logs referencing this supply
+      await db.update(workLogs).set({ supplyId: null }).where(eq(workLogs.supplyId, req.params.id as string));
+      await storage.deleteSupply(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Không thể xóa vật tư" });
+    }
   });
 
   // ── SUPPLY TRANSACTIONS ── (manager only)
