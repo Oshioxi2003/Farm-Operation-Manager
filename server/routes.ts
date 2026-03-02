@@ -395,10 +395,15 @@ export async function registerRoutes(
   });
 
   // ── TASKS ── (farmer can update status, manager can create/delete)
-  app.get("/api/tasks", requireAuth, async (_req, res) => {
+  app.get("/api/tasks", requireAuth, async (req, res) => {
     // Check for overdue tasks on task list access
     await checkOverdueTasks();
     const tasks = await storage.getTasks();
+    // Farmer only sees their own assigned tasks
+    if (req.user!.role === "farmer") {
+      const myTasks = tasks.filter(t => t.assigneeId === req.user!.id);
+      return res.json(myTasks);
+    }
     res.json(tasks);
   });
 
@@ -517,8 +522,13 @@ export async function registerRoutes(
   });
 
   // ── WORK LOGS ── (both can create)
-  app.get("/api/work-logs", requireAuth, async (_req, res) => {
+  app.get("/api/work-logs", requireAuth, async (req, res) => {
     const logs = await storage.getWorkLogs();
+    // Farmer only sees their own work logs
+    if (req.user!.role === "farmer") {
+      const myLogs = logs.filter(l => l.userId === req.user!.id);
+      return res.json(myLogs);
+    }
     res.json(logs);
   });
 

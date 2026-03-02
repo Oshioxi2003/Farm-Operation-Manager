@@ -1,4 +1,4 @@
-# AgroManager - He thong quan ly nong nghiep
+# SmartFarm - He thong quan ly nong nghiep
 
 ## Overview
 Agricultural operations management system with two roles: Manager and Farmer. Built with React + Express + PostgreSQL.
