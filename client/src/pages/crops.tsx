@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -130,6 +131,7 @@ function ImageUploadField({
 }
 
 export default function Crops() {
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -512,7 +514,7 @@ export default function Crops() {
         ) : filtered && filtered.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((crop) => (
-              <Card key={crop.id} className="hover-elevate overflow-hidden" data-testid={`card-crop-${crop.id}`}>
+              <Card key={crop.id} className="hover-elevate overflow-hidden cursor-pointer" data-testid={`card-crop-${crop.id}`} onClick={() => navigate(`/crops/${crop.id}`)}>
                 {/* Show crop image if available */}
                 {crop.image && (
                   <div className="aspect-video w-full overflow-hidden bg-muted">
@@ -538,7 +540,7 @@ export default function Crops() {
                       {crop.variety && <p className="text-xs text-muted-foreground">{crop.variety}</p>}
                     </div>
                     {isManager && (
-                      <div className="flex gap-1 shrink-0">
+                      <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(crop)} data-testid={`button-edit-crop-${crop.id}`}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>

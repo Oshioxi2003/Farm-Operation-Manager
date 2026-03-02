@@ -54,7 +54,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton asChild data-active={location === "/crops"} data-testid="nav-crops">
+                <SidebarMenuButton asChild data-active={location === "/crops" || location.startsWith("/crops/")} data-testid="nav-crops">
                   <Link href="/crops">
                     <Sprout className="h-4 w-4" />
                     <span>Cây trồng</span>

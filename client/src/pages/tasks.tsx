@@ -46,8 +46,9 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
 };
 
 const stageLabels: Record<string, string> = {
+  preparation: "Chuẩn bị",
   planting: "Gieo trồng",
-  caring: "Chăm bón",
+  caring: "Chăm sóc",
   harvesting: "Thu hoạch",
 };
 
@@ -336,8 +337,9 @@ export default function Tasks() {
                     <Select name="stage">
                       <SelectTrigger data-testid="select-task-stage"><SelectValue placeholder="Chọn" /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="preparation">Chuẩn bị</SelectItem>
                         <SelectItem value="planting">Gieo trồng</SelectItem>
-                        <SelectItem value="caring">Chăm bón</SelectItem>
+                        <SelectItem value="caring">Chăm sóc</SelectItem>
                         <SelectItem value="harvesting">Thu hoạch</SelectItem>
                       </SelectContent>
                     </Select>
@@ -453,8 +455,9 @@ export default function Tasks() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tất cả giai đoạn</SelectItem>
+                      <SelectItem value="preparation">Chuẩn bị</SelectItem>
                       <SelectItem value="planting">Gieo trồng</SelectItem>
-                      <SelectItem value="caring">Chăm bón</SelectItem>
+                      <SelectItem value="caring">Chăm sóc</SelectItem>
                       <SelectItem value="harvesting">Thu hoạch</SelectItem>
                     </SelectContent>
                   </Select>
@@ -609,7 +612,7 @@ export default function Tasks() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {(isManager || isAssignedToMe) && task.status !== "doing" && (
+                              {(isManager || isAssignedToMe) && task.status !== "doing" && task.status !== "done" && (
                                 <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "doing" } })}>
                                   Bắt đầu làm
                                 </DropdownMenuItem>
@@ -620,11 +623,7 @@ export default function Tasks() {
                                   <Camera className="mr-1 h-3.5 w-3.5" /> Hoàn thành
                                 </DropdownMenuItem>
                               )}
-                              {(isManager || isAssignedToMe) && task.status === "done" && (
-                                <DropdownMenuItem onClick={() => updateMutation.mutate({ id: task.id, data: { status: "todo" } })}>
-                                  Mở lại
-                                </DropdownMenuItem>
-                              )}
+
                               {/* Edit only when todo, manager only */}
                               {isManager && task.status === "todo" && (
                                 <DropdownMenuItem onClick={() => openEdit(task)}>
@@ -711,8 +710,9 @@ export default function Tasks() {
                   <Select name="stage" defaultValue={editTask.stage || undefined}>
                     <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="preparation">Chuẩn bị</SelectItem>
                       <SelectItem value="planting">Gieo trồng</SelectItem>
-                      <SelectItem value="caring">Chăm bón</SelectItem>
+                      <SelectItem value="caring">Chăm sóc</SelectItem>
                       <SelectItem value="harvesting">Thu hoạch</SelectItem>
                     </SelectContent>
                   </Select>

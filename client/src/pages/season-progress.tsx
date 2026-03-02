@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Sprout, Leaf, Sun, CheckCircle2, Circle, ArrowRight, Image,
-  Plus, Trash2, CalendarDays, MapPin, ChevronRight, Clock, Upload,
+  Plus, Trash2, CalendarDays, MapPin, ChevronRight, Clock, Upload, ClipboardList,
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -29,15 +29,17 @@ interface SupplyUsage {
 }
 
 const stages = [
+  { key: "preparation", label: "Chuẩn bị", icon: ClipboardList, color: "text-chart-4" },
   { key: "planting", label: "Gieo trồng", icon: Sprout, color: "text-chart-2" },
-  { key: "caring", label: "Chăm bón", icon: Leaf, color: "text-chart-1" },
+  { key: "caring", label: "Chăm sóc", icon: Leaf, color: "text-chart-1" },
   { key: "harvesting", label: "Thu hoạch", icon: Sun, color: "text-chart-3" },
 ];
 
-const stageIndex: Record<string, number> = { planting: 0, caring: 1, harvesting: 2 };
+const stageIndex: Record<string, number> = { preparation: 0, planting: 1, caring: 2, harvesting: 3 };
 
 const stageBadgeConfig: Record<string, { label: string; color: string }> = {
-  planting: { label: "Chuẩn bị đất", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" },
+  preparation: { label: "Chuẩn bị", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" },
+  planting: { label: "Gieo trồng", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" },
   caring: { label: "Chăm sóc", color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
   harvesting: { label: "Thu hoạch", color: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" },
 };
@@ -169,9 +171,9 @@ export default function SeasonProgress() {
         await apiRequest("PATCH", `/api/tasks/${task.id}`, { status: "done" });
       }
 
-      if (idx < 2) {
-        const nextStage = stages[idx + 1].key as "planting" | "caring" | "harvesting";
-        const progress = Math.min(100, (pendingSeason.progress || 0) + 20);
+      if (idx < 3) {
+        const nextStage = stages[idx + 1].key as "preparation" | "planting" | "caring" | "harvesting";
+        const progress = Math.min(100, (pendingSeason.progress || 0) + 15);
         await updateMutation.mutateAsync({ id: pendingSeason.id, data: { currentStage: nextStage, progress, status: "active" } });
 
         const nextStageTasks = sTasks.filter(t => t.stage === nextStage && t.status === "todo");
@@ -243,462 +245,462 @@ export default function SeasonProgress() {
 
   return (
     <>
-    <ScrollArea className="h-full">
-      <div className="p-4 md:p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Tiến độ giai đoạn</h1>
-          <p className="text-sm text-muted-foreground mt-1">Theo dõi tiến độ các mùa vụ đang hoạt động</p>
-        </div>
-
-        {/* Season selector if multiple */}
-        {activeSeasons.length > 1 && (
-          <div className="flex gap-2 flex-wrap">
-            {activeSeasons.map(s => (
-              <Button
-                key={s.id}
-                variant={selectedSeasonId === s.id ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedSeasonId(s.id)}
-                className="text-sm"
-              >
-                {s.name}
-              </Button>
-            ))}
+      <ScrollArea className="h-full">
+        <div className="p-4 md:p-6 space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold" data-testid="text-page-title">Tiến độ giai đoạn</h1>
+            <p className="text-sm text-muted-foreground mt-1">Theo dõi tiến độ các mùa vụ đang hoạt động</p>
           </div>
-        )}
 
-        {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <Card key={i}><CardContent className="p-4"><Skeleton className="h-40 w-full" /></CardContent></Card>
-            ))}
-          </div>
-        ) : selectedSeason ? (
-          <div className="space-y-5">
-            {/* Season Header */}
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-xl font-bold">{selectedSeason.name}</h2>
-                <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground flex-wrap">
-                  {selectedCrop && (
-                    <span className="flex items-center gap-1">
-                      <Sprout className="h-3.5 w-3.5" /> {selectedCrop.name}
-                    </span>
-                  )}
-                  {selectedSeason.cultivationZone && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" /> {selectedSeason.cultivationZone}
-                    </span>
-                  )}
-                  {selectedSeason.startDate && (
-                    <span className="flex items-center gap-1">
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      {String(selectedSeason.startDate).split("T")[0]}
-                      {selectedSeason.endDate && ` - ${String(selectedSeason.endDate).split("T")[0]}`}
-                    </span>
-                  )}
-                  <Badge className={`${statusLabels[selectedSeason.status]?.color || ""} border-0 text-xs font-medium`}>
-                    {statusLabels[selectedSeason.status]?.label || selectedSeason.status}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Tiến độ</span>
-                  <span className="font-semibold text-emerald-600">{selectedSeason.progress || 0}%</span>
-                </div>
-                <Progress value={selectedSeason.progress || 0} className="h-2.5" />
-              </div>
+          {/* Season selector if multiple */}
+          {activeSeasons.length > 1 && (
+            <div className="flex gap-2 flex-wrap">
+              {activeSeasons.map(s => (
+                <Button
+                  key={s.id}
+                  variant={selectedSeasonId === s.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedSeasonId(s.id)}
+                  className="text-sm"
+                >
+                  {s.name}
+                </Button>
+              ))}
             </div>
+          )}
 
-            {/* Tabs: Công việc / Nhật ký */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="bg-transparent border-b rounded-none p-0 h-auto w-full justify-start gap-0">
-                <TabsTrigger
-                  value="tasks"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-sm font-medium"
-                >
-                  Công việc <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[11px]">{seasonTasks.length}</Badge>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="diary"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-sm font-medium"
-                >
-                  Nhật ký <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[11px]">{seasonWorkLogs?.length || 0}</Badge>
-                </TabsTrigger>
-              </TabsList>
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Card key={i}><CardContent className="p-4"><Skeleton className="h-40 w-full" /></CardContent></Card>
+              ))}
+            </div>
+          ) : selectedSeason ? (
+            <div className="space-y-5">
+              {/* Season Header */}
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold">{selectedSeason.name}</h2>
+                  <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground flex-wrap">
+                    {selectedCrop && (
+                      <span className="flex items-center gap-1">
+                        <Sprout className="h-3.5 w-3.5" /> {selectedCrop.name}
+                      </span>
+                    )}
+                    {selectedSeason.cultivationZone && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" /> {selectedSeason.cultivationZone}
+                      </span>
+                    )}
+                    {selectedSeason.startDate && (
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        {String(selectedSeason.startDate).split("T")[0]}
+                        {selectedSeason.endDate && ` - ${String(selectedSeason.endDate).split("T")[0]}`}
+                      </span>
+                    )}
+                    <Badge className={`${statusLabels[selectedSeason.status]?.color || ""} border-0 text-xs font-medium`}>
+                      {statusLabels[selectedSeason.status]?.label || selectedSeason.status}
+                    </Badge>
+                  </div>
+                </div>
 
-              {/* === CÔNG VIỆC TAB === */}
-              <TabsContent value="tasks" className="space-y-3 mt-0">
-                {seasonTasks.length > 0 ? seasonTasks.map(task => {
-                  const assignee = users?.find(u => u.id === task.assigneeId);
-                  const stgCfg = stageBadgeConfig[task.stage || "planting"] || stageBadgeConfig.planting;
+                {/* Progress bar */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Tiến độ</span>
+                    <span className="font-semibold text-emerald-600">{selectedSeason.progress || 0}%</span>
+                  </div>
+                  <Progress value={selectedSeason.progress || 0} className="h-2.5" />
+                </div>
+              </div>
 
-                  return (
-                    <Card key={task.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                      <CardContent className="p-4 space-y-3">
-                        {/* Task header */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-1">
-                            <h4 className="font-semibold text-sm">{task.title}</h4>
-                            <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                              <Badge className={`${stgCfg.color} border-0 text-[11px] font-medium px-2 py-0`}>
-                                {stgCfg.label}
+              {/* Tabs: Công việc / Nhật ký */}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                <TabsList className="bg-transparent border-b rounded-none p-0 h-auto w-full justify-start gap-0">
+                  <TabsTrigger
+                    value="tasks"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-sm font-medium"
+                  >
+                    Công việc <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[11px]">{seasonTasks.length}</Badge>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="diary"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-sm font-medium"
+                  >
+                    Nhật ký <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[11px]">{seasonWorkLogs?.length || 0}</Badge>
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* === CÔNG VIỆC TAB === */}
+                <TabsContent value="tasks" className="space-y-3 mt-0">
+                  {seasonTasks.length > 0 ? seasonTasks.map(task => {
+                    const assignee = users?.find(u => u.id === task.assigneeId);
+                    const stgCfg = stageBadgeConfig[task.stage || "planting"] || stageBadgeConfig.planting;
+
+                    return (
+                      <Card key={task.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                        <CardContent className="p-4 space-y-3">
+                          {/* Task header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <h4 className="font-semibold text-sm">{task.title}</h4>
+                              <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                                <Badge className={`${stgCfg.color} border-0 text-[11px] font-medium px-2 py-0`}>
+                                  {stgCfg.label}
+                                </Badge>
+                                {task.dueDate && (
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" /> Dự kiến: {String(task.dueDate).split("T")[0]}
+                                  </span>
+                                )}
+                                {task.completedAt && (
+                                  <span className="flex items-center gap-1 text-emerald-600">
+                                    <CheckCircle2 className="h-3 w-3" /> Hoàn thành: {String(task.completedAt).split("T")[0]}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action button */}
+                            {task.status === "done" ? (
+                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0 text-xs shrink-0 gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> Hoàn thành
                               </Badge>
-                              {task.dueDate && (
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" /> Dự kiến: {String(task.dueDate).split("T")[0]}
+                            ) : isFarmer && task.status !== "todo" ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 shrink-0 gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                                onClick={() => handleCompleteTask(task)}
+                                disabled={taskUpdateMutation.isPending}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                {task.stage === "harvesting" ? "Chưa thực hiện" : "Hoàn thành"}
+                              </Button>
+                            ) : isFarmer && task.status === "todo" ? (
+                              <Badge variant="outline" className="text-xs shrink-0 gap-1">
+                                <Clock className="h-3 w-3" /> Chờ thực hiện
+                              </Badge>
+                            ) : null}
+                          </div>
+
+                          {/* Proof image */}
+                          {task.proofImage && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-medium text-muted-foreground">Ảnh minh chứng</p>
+                              <img
+                                src={task.proofImage}
+                                alt="Ảnh minh chứng"
+                                className="max-w-[280px] max-h-[160px] rounded-lg border object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Description / notes */}
+                          {task.description && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">Ghi chú</p>
+                              <p className="text-sm text-muted-foreground bg-muted/30 p-2.5 rounded-md">{task.description}</p>
+                            </div>
+                          )}
+
+                          {/* Assignee */}
+                          {assignee && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary shrink-0">
+                                {assignee.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                              </span>
+                              {assignee.fullName}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  }) : (
+                    <div className="text-center py-10">
+                      <Circle className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
+                      <p className="text-sm text-muted-foreground">Chưa có công việc nào</p>
+                    </div>
+                  )}
+
+                  {/* Advance stage button */}
+                  {selectedSeason.status !== "completed" && isFarmer && (
+                    <div className="pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openAdvanceDialog(selectedSeason)}
+                        disabled={updateMutation.isPending}
+                        data-testid={`button-advance-${selectedSeason.id}`}
+                        className="w-full justify-center"
+                      >
+                        {(selectedSeason.currentStage ? stageIndex[selectedSeason.currentStage] : 0) < 3 ? (
+                          <>Chuyển sang {stages[(selectedSeason.currentStage ? stageIndex[selectedSeason.currentStage] : 0) + 1].label} <ArrowRight className="ml-1 h-3 w-3" /></>
+                        ) : (
+                          <>Hoàn thành mùa vụ <CheckCircle2 className="ml-1 h-3 w-3" /></>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
+                  {selectedSeason.status !== "completed" && !isFarmer && (
+                    <p className="text-xs text-muted-foreground italic text-center pt-2">
+                      Chỉ nông dân được giao mới có thể chuyển giai đoạn
+                    </p>
+                  )}
+                </TabsContent>
+
+                {/* === NHẬT KÝ TAB === */}
+                <TabsContent value="diary" className="space-y-3 mt-0">
+                  {seasonWorkLogs && seasonWorkLogs.length > 0 ? seasonWorkLogs.map(log => {
+                    const logDate = log.createdAt ? new Date(log.createdAt) : null;
+                    const logUser = users?.find(u => u.id === log.userId);
+                    // Try to find related task
+                    const relatedTask = log.taskId ? allTasks?.find(t => t.id === log.taskId) : null;
+                    const taskStage = relatedTask?.stage ? stageBadgeConfig[relatedTask.stage] : null;
+
+                    // Check if content has an image URL
+                    const imageMatch = log.content.match(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/);
+                    const imageUrl = imageMatch ? imageMatch[1] : null;
+                    const displayContent = log.content.replace(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/, "").trim();
+
+                    return (
+                      <Card key={log.id} className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedWorkLog(log)}>
+                        <CardContent className="p-4 space-y-3">
+                          {/* Log header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              {logDate && (
+                                <span className="flex items-center gap-1 font-medium text-foreground">
+                                  <CalendarDays className="h-3 w-3 text-amber-500" />
+                                  {logDate.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
                                 </span>
                               )}
-                              {task.completedAt && (
-                                <span className="flex items-center gap-1 text-emerald-600">
-                                  <CheckCircle2 className="h-3 w-3" /> Hoàn thành: {String(task.completedAt).split("T")[0]}
-                                </span>
+                              {relatedTask && (
+                                <span className="text-muted-foreground">• {relatedTask.title}</span>
+                              )}
+                              {taskStage && (
+                                <Badge className={`${taskStage.color} border-0 text-[11px] font-medium px-2 py-0`}>
+                                  {taskStage.label}
+                                </Badge>
                               )}
                             </div>
+                            <Button variant="ghost" size="sm" className="text-xs text-primary h-6 gap-1 shrink-0 px-2" onClick={(e) => { e.stopPropagation(); setSelectedWorkLog(log); }}>
+                              Xem chi tiết <ChevronRight className="h-3 w-3" />
+                            </Button>
                           </div>
 
-                          {/* Action button */}
-                          {task.status === "done" ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0 text-xs shrink-0 gap-1">
-                              <CheckCircle2 className="h-3 w-3" /> Hoàn thành
-                            </Badge>
-                          ) : isFarmer && task.status !== "todo" ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-xs h-7 shrink-0 gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                              onClick={() => handleCompleteTask(task)}
-                              disabled={taskUpdateMutation.isPending}
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              {task.stage === "harvesting" ? "Chưa thực hiện" : "Hoàn thành"}
-                            </Button>
-                          ) : isFarmer && task.status === "todo" ? (
-                            <Badge variant="outline" className="text-xs shrink-0 gap-1">
-                              <Clock className="h-3 w-3" /> Chờ thực hiện
-                            </Badge>
-                          ) : null}
-                        </div>
+                          {/* Image */}
+                          {imageUrl && (
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-medium text-muted-foreground">Ảnh minh chứng</p>
+                              <img
+                                src={imageUrl}
+                                alt="Ảnh nhật ký"
+                                className="max-w-[280px] max-h-[160px] rounded-lg border object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            </div>
+                          )}
 
-                        {/* Proof image */}
-                        {task.proofImage && (
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground">Ảnh minh chứng</p>
-                            <img
-                              src={task.proofImage}
-                              alt="Ảnh minh chứng"
-                              className="max-w-[280px] max-h-[160px] rounded-lg border object-cover"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          {/* Content */}
+                          {displayContent && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">Mô tả</p>
+                              <p className="text-sm text-muted-foreground">{displayContent}</p>
+                            </div>
+                          )}
+
+                          {/* Supply info */}
+                          {log.supplyId && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/30 p-2 rounded-md">
+                              📦 Vật tư sử dụng: {log.supplyQuantity} đơn vị
+                            </div>
+                          )}
+
+                          {/* User */}
+                          {logUser && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary shrink-0">
+                                {logUser.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                              </span>
+                              {logUser.fullName}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  }) : (
+                    <div className="text-center py-10">
+                      <CalendarDays className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
+                      <p className="text-sm text-muted-foreground">Chưa có nhật ký nào</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <Sprout className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">Không có mùa vụ đang hoạt động</p>
+            </div>
+          )}
+        </div>
+
+        {/* Diary entry dialog when advancing stage */}
+        <Dialog open={diaryOpen} onOpenChange={(o) => { setDiaryOpen(o); if (!o) setPendingSeason(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Ghi nhật ký giai đoạn
+                {pendingSeason && ` - ${pendingSeason.name}`}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {pendingSeason && (
+                <div className="p-3 bg-muted/30 rounded-md text-sm">
+                  <p>Giai đoạn hiện tại: <strong>{stages[stageIndex[pendingSeason.currentStage || "planting"]]?.label}</strong></p>
+                  <p className="text-muted-foreground">
+                    {(stageIndex[pendingSeason.currentStage || "planting"] || 0) < 2
+                      ? `→ Chuyển sang: ${stages[(stageIndex[pendingSeason.currentStage || "planting"] || 0) + 1]?.label}`
+                      : "→ Hoàn thành mùa vụ"}
+                  </p>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="diary-content">Nội dung nhật ký</Label>
+                <Textarea
+                  id="diary-content"
+                  placeholder="Mô tả công việc đã làm, kết quả, ghi chú..."
+                  rows={4}
+                  value={diaryContent}
+                  onChange={(e) => setDiaryContent(e.target.value)}
+                  data-testid="input-diary-content"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1">
+                  <Image className="h-3.5 w-3.5" /> Ảnh minh chứng
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="diary-image"
+                    placeholder="Dán URL ảnh..."
+                    className="flex-1"
+                    data-testid="input-diary-image"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = (e.target as HTMLInputElement).value.trim();
+                        if (val) { setDiaryImages(prev => [...prev, val]); (e.target as HTMLInputElement).value = ''; }
+                      }
+                    }}
+                  />
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-xs font-medium cursor-pointer hover:bg-muted transition-colors shrink-0">
+                    <Upload className="h-3.5 w-3.5" />
+                    {uploadingDiaryImage ? "Đang tải..." : "Tải ảnh"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleDiaryImageUpload}
+                      disabled={uploadingDiaryImage}
+                    />
+                  </label>
+                </div>
+                {diaryImages.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {diaryImages.map((url, i) => (
+                      <div key={i} className="relative inline-block">
+                        <img
+                          src={url}
+                          alt={`Preview ${i + 1}`}
+                          className="w-[80px] h-[60px] rounded-md border object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setDiaryImages(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full h-4 w-4 flex items-center justify-center text-[10px]"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Supply usage section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Vật tư sử dụng</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addSupplyUsage} className="h-7 text-xs">
+                    <Plus className="mr-1 h-3 w-3" /> Thêm vật tư
+                  </Button>
+                </div>
+                {supplyUsages.length > 0 ? (
+                  <div className="space-y-2">
+                    {supplyUsages.map((usage, index) => {
+                      const selectedSupply = supplies?.find(s => s.id === usage.supplyId);
+                      return (
+                        <div key={index} className="flex items-center gap-2 p-2 rounded-md bg-muted/30">
+                          <div className="flex-1">
+                            <Select value={usage.supplyId} onValueChange={(v) => updateSupplyUsage(index, "supplyId", v)}>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Chọn vật tư..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {supplies?.filter(s => s.currentStock > 0).map(s => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {s.name} (tồn: {s.currentStock} {s.unit})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="w-24">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={selectedSupply?.currentStock || 999}
+                              step={0.1}
+                              placeholder="SL"
+                              className="h-8 text-xs"
+                              value={usage.quantity || ""}
+                              onChange={(e) => updateSupplyUsage(index, "quantity", parseFloat(e.target.value) || 0)}
                             />
                           </div>
-                        )}
-
-                        {/* Description / notes */}
-                        {task.description && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-muted-foreground">Ghi chú</p>
-                            <p className="text-sm text-muted-foreground bg-muted/30 p-2.5 rounded-md">{task.description}</p>
-                          </div>
-                        )}
-
-                        {/* Assignee */}
-                        {assignee && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary shrink-0">
-                              {assignee.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-                            </span>
-                            {assignee.fullName}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                }) : (
-                  <div className="text-center py-10">
-                    <Circle className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
-                    <p className="text-sm text-muted-foreground">Chưa có công việc nào</p>
-                  </div>
-                )}
-
-                {/* Advance stage button */}
-                {selectedSeason.status !== "completed" && isFarmer && (
-                  <div className="pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openAdvanceDialog(selectedSeason)}
-                      disabled={updateMutation.isPending}
-                      data-testid={`button-advance-${selectedSeason.id}`}
-                      className="w-full justify-center"
-                    >
-                      {(selectedSeason.currentStage ? stageIndex[selectedSeason.currentStage] : 0) < 2 ? (
-                        <>Chuyển sang {stages[(selectedSeason.currentStage ? stageIndex[selectedSeason.currentStage] : 0) + 1].label} <ArrowRight className="ml-1 h-3 w-3" /></>
-                      ) : (
-                        <>Hoàn thành mùa vụ <CheckCircle2 className="ml-1 h-3 w-3" /></>
-                      )}
-                    </Button>
-                  </div>
-                )}
-
-                {selectedSeason.status !== "completed" && !isFarmer && (
-                  <p className="text-xs text-muted-foreground italic text-center pt-2">
-                    Chỉ nông dân được giao mới có thể chuyển giai đoạn
-                  </p>
-                )}
-              </TabsContent>
-
-              {/* === NHẬT KÝ TAB === */}
-              <TabsContent value="diary" className="space-y-3 mt-0">
-                {seasonWorkLogs && seasonWorkLogs.length > 0 ? seasonWorkLogs.map(log => {
-                  const logDate = log.createdAt ? new Date(log.createdAt) : null;
-                  const logUser = users?.find(u => u.id === log.userId);
-                  // Try to find related task
-                  const relatedTask = log.taskId ? allTasks?.find(t => t.id === log.taskId) : null;
-                  const taskStage = relatedTask?.stage ? stageBadgeConfig[relatedTask.stage] : null;
-
-                  // Check if content has an image URL
-                  const imageMatch = log.content.match(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/);
-                  const imageUrl = imageMatch ? imageMatch[1] : null;
-                  const displayContent = log.content.replace(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/, "").trim();
-
-                  return (
-                    <Card key={log.id} className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedWorkLog(log)}>
-                      <CardContent className="p-4 space-y-3">
-                        {/* Log header */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap text-xs">
-                            {logDate && (
-                              <span className="flex items-center gap-1 font-medium text-foreground">
-                                <CalendarDays className="h-3 w-3 text-amber-500" />
-                                {logDate.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                              </span>
-                            )}
-                            {relatedTask && (
-                              <span className="text-muted-foreground">• {relatedTask.title}</span>
-                            )}
-                            {taskStage && (
-                              <Badge className={`${taskStage.color} border-0 text-[11px] font-medium px-2 py-0`}>
-                                {taskStage.label}
-                              </Badge>
-                            )}
-                          </div>
-                          <Button variant="ghost" size="sm" className="text-xs text-primary h-6 gap-1 shrink-0 px-2" onClick={(e) => { e.stopPropagation(); setSelectedWorkLog(log); }}>
-                            Xem chi tiết <ChevronRight className="h-3 w-3" />
+                          {selectedSupply && (
+                            <span className="text-[10px] text-muted-foreground w-8">{selectedSupply.unit}</span>
+                          )}
+                          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => removeSupplyUsage(index)}>
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-
-                        {/* Image */}
-                        {imageUrl && (
-                          <div className="space-y-1.5">
-                            <p className="text-xs font-medium text-muted-foreground">Ảnh minh chứng</p>
-                            <img
-                              src={imageUrl}
-                              alt="Ảnh nhật ký"
-                              className="max-w-[280px] max-h-[160px] rounded-lg border object-cover"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Content */}
-                        {displayContent && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-muted-foreground">Mô tả</p>
-                            <p className="text-sm text-muted-foreground">{displayContent}</p>
-                          </div>
-                        )}
-
-                        {/* Supply info */}
-                        {log.supplyId && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/30 p-2 rounded-md">
-                            📦 Vật tư sử dụng: {log.supplyQuantity} đơn vị
-                          </div>
-                        )}
-
-                        {/* User */}
-                        {logUser && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary shrink-0">
-                              {logUser.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-                            </span>
-                            {logUser.fullName}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                }) : (
-                  <div className="text-center py-10">
-                    <CalendarDays className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
-                    <p className="text-sm text-muted-foreground">Chưa có nhật ký nào</p>
+                      );
+                    })}
                   </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Chưa có vật tư nào được chọn</p>
                 )}
-              </TabsContent>
-            </Tabs>
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <Sprout className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">Không có mùa vụ đang hoạt động</p>
-          </div>
-        )}
-      </div>
-
-      {/* Diary entry dialog when advancing stage */}
-      <Dialog open={diaryOpen} onOpenChange={(o) => { setDiaryOpen(o); if (!o) setPendingSeason(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Ghi nhật ký giai đoạn
-              {pendingSeason && ` - ${pendingSeason.name}`}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {pendingSeason && (
-              <div className="p-3 bg-muted/30 rounded-md text-sm">
-                <p>Giai đoạn hiện tại: <strong>{stages[stageIndex[pendingSeason.currentStage || "planting"]]?.label}</strong></p>
-                <p className="text-muted-foreground">
-                  {(stageIndex[pendingSeason.currentStage || "planting"] || 0) < 2
-                    ? `→ Chuyển sang: ${stages[(stageIndex[pendingSeason.currentStage || "planting"] || 0) + 1]?.label}`
-                    : "→ Hoàn thành mùa vụ"}
-                </p>
               </div>
-            )}
-            <div className="space-y-1.5">
-              <Label htmlFor="diary-content">Nội dung nhật ký</Label>
-              <Textarea
-                id="diary-content"
-                placeholder="Mô tả công việc đã làm, kết quả, ghi chú..."
-                rows={4}
-                value={diaryContent}
-                onChange={(e) => setDiaryContent(e.target.value)}
-                data-testid="input-diary-content"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1">
-                <Image className="h-3.5 w-3.5" /> Ảnh minh chứng
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="diary-image"
-                  placeholder="Dán URL ảnh..."
-                  className="flex-1"
-                  data-testid="input-diary-image"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const val = (e.target as HTMLInputElement).value.trim();
-                      if (val) { setDiaryImages(prev => [...prev, val]); (e.target as HTMLInputElement).value = ''; }
-                    }
-                  }}
-                />
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-xs font-medium cursor-pointer hover:bg-muted transition-colors shrink-0">
-                  <Upload className="h-3.5 w-3.5" />
-                  {uploadingDiaryImage ? "Đang tải..." : "Tải ảnh"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleDiaryImageUpload}
-                    disabled={uploadingDiaryImage}
-                  />
-                </label>
-              </div>
-              {diaryImages.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {diaryImages.map((url, i) => (
-                    <div key={i} className="relative inline-block">
-                      <img
-                        src={url}
-                        alt={`Preview ${i + 1}`}
-                        className="w-[80px] h-[60px] rounded-md border object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setDiaryImages(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full h-4 w-4 flex items-center justify-center text-[10px]"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            {/* Supply usage section */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Vật tư sử dụng</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addSupplyUsage} className="h-7 text-xs">
-                  <Plus className="mr-1 h-3 w-3" /> Thêm vật tư
-                </Button>
-              </div>
-              {supplyUsages.length > 0 ? (
-                <div className="space-y-2">
-                  {supplyUsages.map((usage, index) => {
-                    const selectedSupply = supplies?.find(s => s.id === usage.supplyId);
-                    return (
-                      <div key={index} className="flex items-center gap-2 p-2 rounded-md bg-muted/30">
-                        <div className="flex-1">
-                          <Select value={usage.supplyId} onValueChange={(v) => updateSupplyUsage(index, "supplyId", v)}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Chọn vật tư..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {supplies?.filter(s => s.currentStock > 0).map(s => (
-                                <SelectItem key={s.id} value={s.id}>
-                                  {s.name} (tồn: {s.currentStock} {s.unit})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="w-24">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={selectedSupply?.currentStock || 999}
-                            step={0.1}
-                            placeholder="SL"
-                            className="h-8 text-xs"
-                            value={usage.quantity || ""}
-                            onChange={(e) => updateSupplyUsage(index, "quantity", parseFloat(e.target.value) || 0)}
-                          />
-                        </div>
-                        {selectedSupply && (
-                          <span className="text-[10px] text-muted-foreground w-8">{selectedSupply.unit}</span>
-                        )}
-                        <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => removeSupplyUsage(index)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">Chưa có vật tư nào được chọn</p>
-              )}
+              <Button
+                className="w-full"
+                onClick={confirmAdvance}
+                disabled={updateMutation.isPending}
+                data-testid="button-confirm-advance"
+              >
+                {updateMutation.isPending ? "Đang xử lý..." : "Xác nhận & Ghi nhật ký"}
+              </Button>
             </div>
-
-            <Button
-              className="w-full"
-              onClick={confirmAdvance}
-              disabled={updateMutation.isPending}
-              data-testid="button-confirm-advance"
-            >
-              {updateMutation.isPending ? "Đang xử lý..." : "Xác nhận & Ghi nhật ký"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </ScrollArea>
+          </DialogContent>
+        </Dialog>
+      </ScrollArea>
 
       {/* Work log detail dialog */}
       <Dialog open={!!selectedWorkLog} onOpenChange={(o) => { if (!o) setSelectedWorkLog(null); }}>

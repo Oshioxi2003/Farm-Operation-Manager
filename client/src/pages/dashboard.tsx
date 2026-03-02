@@ -43,12 +43,14 @@ const severityColors: Record<string, string> = {
 };
 
 const stageLabels: Record<string, string> = {
+  preparation: "Chuẩn bị",
   planting: "Gieo trồng",
-  caring: "Chăm bón",
+  caring: "Chăm sóc",
   harvesting: "Thu hoạch",
 };
 
 const stageIcons: Record<string, typeof Sprout> = {
+  preparation: ClipboardList,
   planting: Sprout,
   caring: Leaf,
   harvesting: Sun,

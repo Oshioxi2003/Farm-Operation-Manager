@@ -84,7 +84,7 @@ export async function seedDatabase() {
       name: "Vụ Xuân Hè 2026",
       cropId: caPhao.id,
       status: "active",
-      currentStage: "planting",
+      currentStage: "preparation",
       startDate: "2026-02-01",
       endDate: "2026-05-15",
       area: 1.2,

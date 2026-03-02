@@ -15,6 +15,7 @@ import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Crops from "@/pages/crops";
+import CropDetail from "@/pages/crop-detail";
 import Seasons from "@/pages/seasons";
 import SeasonProgress from "@/pages/season-progress";
 import Tasks from "@/pages/tasks";
@@ -125,6 +126,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/crops" component={Crops} />
+      <Route path="/crops/:id" component={CropDetail} />
       <Route path="/seasons" component={Seasons} />
       <Route path="/seasons/progress" component={SeasonProgress} />
       <Route path="/tasks" component={Tasks} />

@@ -49,12 +49,14 @@ const statusBadgeVariant: Record<string, "default" | "secondary" | "outline"> = 
 };
 
 const stageLabels: Record<string, string> = {
+  preparation: "Chuẩn bị",
   planting: "Gieo trồng",
-  caring: "Chăm bón",
+  caring: "Chăm sóc",
   harvesting: "Thu hoạch",
 };
 
 const stageIcons: Record<string, typeof Sprout> = {
+  preparation: ClipboardList,
   planting: Sprout,
   caring: Leaf,
   harvesting: Sun,
@@ -72,7 +74,7 @@ interface TemplateTask {
   description: string;
   stage: string;
   priority: string;
-  dueDate: string;
+  durationDays: string;
   assigneeId: string;
 }
 
@@ -225,9 +227,9 @@ export default function Seasons() {
     ? templateSeasonTasks.map(t => ({
       title: t.title,
       description: t.description || "",
-      stage: t.stage || "planting",
+      stage: t.stage || "preparation",
       priority: t.priority || "medium",
-      dueDate: t.dueDate ? String(t.dueDate).split("T")[0] : "",
+      durationDays: "",
       assigneeId: t.assigneeId || "",
     }))
     : templateTasks;
@@ -238,9 +240,9 @@ export default function Seasons() {
       setTemplateTasks(templateSeasonTasks.map(t => ({
         title: t.title,
         description: t.description || "",
-        stage: t.stage || "planting",
+        stage: t.stage || "preparation",
         priority: t.priority || "medium",
-        dueDate: t.dueDate ? String(t.dueDate).split("T")[0] : "",
+        durationDays: "",
         assigneeId: t.assigneeId || "",
       })));
     }, 0);
@@ -248,11 +250,18 @@ export default function Seasons() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    // Validate ngày kết thúc phải >= ngày bắt đầu
+    if (formStartDate && formEndDate && formEndDate < formStartDate) {
+      toast({ title: "Lỗi", description: "Ngày kết thúc không được nhỏ hơn ngày bắt đầu", variant: "destructive" });
+      return;
+    }
+
     const seasonData = {
       name: formName,
       cropId: formCropId || null,
       status: "planning",
-      currentStage: "planting",
+      currentStage: "preparation",
       startDate: formStartDate || null,
       endDate: formEndDate || null,
       area: parseFloat(formArea) || null,
@@ -269,7 +278,16 @@ export default function Seasons() {
 
       // Create template tasks if any
       const tasksToCreate = currentTemplateTasks.length > 0 ? currentTemplateTasks : [];
+      // Tự tính dueDate từ startDate + số ngày cộng dồn
+      let cumulativeDays = 0;
       for (const task of tasksToCreate) {
+        const days = parseInt(task.durationDays) || 0;
+        cumulativeDays += days;
+        let computedDueDate: Date | null = null;
+        if (formStartDate && days > 0) {
+          computedDueDate = new Date(formStartDate);
+          computedDueDate.setDate(computedDueDate.getDate() + cumulativeDays);
+        }
         await apiRequest("POST", "/api/tasks", {
           title: task.title,
           description: task.description,
@@ -277,7 +295,7 @@ export default function Seasons() {
           stage: task.stage,
           priority: task.priority,
           status: "todo",
-          dueDate: task.dueDate ? new Date(task.dueDate) : null,
+          dueDate: computedDueDate,
           assigneeId: task.assigneeId || null,
         });
       }
@@ -309,9 +327,9 @@ export default function Seasons() {
     updated.push({
       title: "",
       description: "",
-      stage: "planting",
+      stage: "preparation",
       priority: "medium",
-      dueDate: "",
+      durationDays: "",
       assigneeId: "",
     });
     setTemplateTasks(updated);
@@ -453,7 +471,7 @@ export default function Seasons() {
                           <TableHead className="text-xs font-semibold">TÊN CÔNG VIỆC</TableHead>
                           <TableHead className="text-xs font-semibold">NGƯỜI PHỤ TRÁCH</TableHead>
                           <TableHead className="text-xs font-semibold">GIAI ĐOẠN</TableHead>
-                          <TableHead className="text-xs font-semibold">THỜI GIAN</TableHead>
+                          <TableHead className="text-xs font-semibold">SỐ NGÀY</TableHead>
                           <TableHead className="w-20 text-center text-xs font-semibold">HÀNH ĐỘNG</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -461,11 +479,12 @@ export default function Seasons() {
                         {currentTemplateTasks.length > 0 ? currentTemplateTasks.map((task, idx) => {
                           const assignee = users?.find(u => u.id === task.assigneeId);
                           const stageConfig: Record<string, { label: string; color: string }> = {
-                            planting: { label: "Chuẩn bị", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" },
+                            preparation: { label: "Chuẩn bị", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" },
+                            planting: { label: "Gieo trồng", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" },
                             caring: { label: "Chăm sóc", color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
                             harvesting: { label: "Thu hoạch", color: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" },
                           };
-                          const stage = stageConfig[task.stage] || stageConfig.planting;
+                          const stage = stageConfig[task.stage] || stageConfig.preparation;
                           const initials = assignee ? assignee.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() : "";
 
                           return (
@@ -511,19 +530,25 @@ export default function Seasons() {
                                     </Badge>
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="planting">Chuẩn bị</SelectItem>
+                                    <SelectItem value="preparation">Chuẩn bị</SelectItem>
+                                    <SelectItem value="planting">Gieo trồng</SelectItem>
                                     <SelectItem value="caring">Chăm sóc</SelectItem>
                                     <SelectItem value="harvesting">Thu hoạch</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </TableCell>
                               <TableCell>
-                                <Input
-                                  type="date"
-                                  value={task.dueDate}
-                                  onChange={(e) => updateTemplateTask(idx, "dueDate", e.target.value)}
-                                  className="h-8 text-xs border-0 shadow-none px-0 focus-visible:ring-0 w-[130px]"
-                                />
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    value={task.durationDays}
+                                    onChange={(e) => updateTemplateTask(idx, "durationDays", e.target.value)}
+                                    className="h-8 text-xs border-0 shadow-none px-0 focus-visible:ring-0 w-[70px]"
+                                    placeholder="0"
+                                  />
+                                  <span className="text-xs text-muted-foreground shrink-0">ngày</span>
+                                </div>
                               </TableCell>
                               <TableCell className="text-center">
                                 <div className="flex items-center justify-center gap-0.5">
@@ -608,8 +633,9 @@ export default function Seasons() {
                         <Select value={task.stage} onValueChange={(v) => updateTemplateTask(detailTaskIndex, "stage", v)}>
                           <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="preparation">Chuẩn bị</SelectItem>
                             <SelectItem value="planting">Gieo trồng</SelectItem>
-                            <SelectItem value="caring">Chăm bón</SelectItem>
+                            <SelectItem value="caring">Chăm sóc</SelectItem>
                             <SelectItem value="harvesting">Thu hoạch</SelectItem>
                           </SelectContent>
                         </Select>
@@ -628,12 +654,14 @@ export default function Seasons() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="detail-dueDate">Hạn chót</Label>
+                        <Label htmlFor="detail-durationDays">Số ngày</Label>
                         <Input
-                          id="detail-dueDate"
-                          type="date"
-                          value={task.dueDate}
-                          onChange={(e) => updateTemplateTask(detailTaskIndex, "dueDate", e.target.value)}
+                          id="detail-durationDays"
+                          type="number"
+                          min={1}
+                          placeholder="Nhập số ngày"
+                          value={task.durationDays}
+                          onChange={(e) => updateTemplateTask(detailTaskIndex, "durationDays", e.target.value)}
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -745,8 +773,9 @@ export default function Seasons() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tất cả giai đoạn</SelectItem>
+                      <SelectItem value="preparation">Chuẩn bị</SelectItem>
                       <SelectItem value="planting">Gieo trồng</SelectItem>
-                      <SelectItem value="caring">Chăm bón</SelectItem>
+                      <SelectItem value="caring">Chăm sóc</SelectItem>
                       <SelectItem value="harvesting">Thu hoạch</SelectItem>
                     </SelectContent>
                   </Select>
@@ -847,7 +876,8 @@ export default function Seasons() {
               };
 
               const stageBadgeConfig: Record<string, { label: string; color: string }> = {
-                planting: { label: "Chuẩn bị đất", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" },
+                preparation: { label: "Chuẩn bị", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" },
+                planting: { label: "Gieo trồng", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" },
                 caring: { label: "Chăm sóc", color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
                 harvesting: { label: "Thu hoạch", color: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" },
               };
@@ -961,133 +991,133 @@ export default function Seasons() {
                     )}
 
                     {/* Expandable tabs */}
-                      <Collapsible open={isExpanded} onOpenChange={() => toggleExpand(season.id)}>
-                        <CollapsibleTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 text-xs w-full justify-start gap-1.5 px-0 hover:bg-transparent" data-testid={`button-expand-season-${season.id}`}>
-                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                            Xem chi tiết ({taskCount} công việc)
-                          </Button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <Tabs value={seasonTab} onValueChange={setSeasonTab} className="mt-3">
-                            <TabsList className="bg-transparent border-b rounded-none p-0 h-auto w-full justify-start gap-0">
-                              <TabsTrigger
-                                value="tasks"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-xs font-medium"
-                              >
-                                Công việc <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]">{seasonTasks?.length || 0}</Badge>
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="diary"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-xs font-medium"
-                              >
-                                Nhật ký <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]">{seasonWorkLogs?.length || 0}</Badge>
-                              </TabsTrigger>
-                            </TabsList>
+                    <Collapsible open={isExpanded} onOpenChange={() => toggleExpand(season.id)}>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 text-xs w-full justify-start gap-1.5 px-0 hover:bg-transparent" data-testid={`button-expand-season-${season.id}`}>
+                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          Xem chi tiết ({taskCount} công việc)
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <Tabs value={seasonTab} onValueChange={setSeasonTab} className="mt-3">
+                          <TabsList className="bg-transparent border-b rounded-none p-0 h-auto w-full justify-start gap-0">
+                            <TabsTrigger
+                              value="tasks"
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-xs font-medium"
+                            >
+                              Công việc <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]">{seasonTasks?.length || 0}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger
+                              value="diary"
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-xs font-medium"
+                            >
+                              Nhật ký <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]">{seasonWorkLogs?.length || 0}</Badge>
+                            </TabsTrigger>
+                          </TabsList>
 
-                            {/* Công việc tab */}
-                            <TabsContent value="tasks" className="space-y-2 mt-3">
-                              {seasonTasks && seasonTasks.length > 0 ? seasonTasks.map(task => {
-                                const assignee = users?.find(u => u.id === task.assigneeId);
-                                const stgCfg = stageBadgeConfig[task.stage || "planting"] || stageBadgeConfig.planting;
+                          {/* Công việc tab */}
+                          <TabsContent value="tasks" className="space-y-2 mt-3">
+                            {seasonTasks && seasonTasks.length > 0 ? seasonTasks.map(task => {
+                              const assignee = users?.find(u => u.id === task.assigneeId);
+                              const stgCfg = stageBadgeConfig[task.stage || "planting"] || stageBadgeConfig.planting;
 
-                                return (
-                                  <div key={task.id} className="p-3 border rounded-lg space-y-2">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="space-y-1 min-w-0">
-                                        <p className="font-medium text-sm">{task.title}</p>
-                                        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                                          <Badge className={`${stgCfg.color} border-0 text-[10px] font-medium px-2 py-0`}>
-                                            {stgCfg.label}
-                                          </Badge>
-                                          {task.dueDate && (
-                                            <span>Dự kiến: {String(task.dueDate).split("T")[0]}</span>
-                                          )}
-                                          {task.completedAt && (
-                                            <span className="text-emerald-600">Hoàn thành: {String(task.completedAt).split("T")[0]}</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      {task.status === "done" ? (
-                                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0 text-[10px] shrink-0 gap-1">
-                                          <CheckCircle2 className="h-3 w-3" /> Hoàn thành
+                              return (
+                                <div key={task.id} className="p-3 border rounded-lg space-y-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 min-w-0">
+                                      <p className="font-medium text-sm">{task.title}</p>
+                                      <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                                        <Badge className={`${stgCfg.color} border-0 text-[10px] font-medium px-2 py-0`}>
+                                          {stgCfg.label}
                                         </Badge>
-                                      ) : (
-                                        <Badge variant="outline" className="text-[10px] shrink-0">{taskStatusConfig[task.status]?.label || task.status}</Badge>
-                                      )}
+                                        {task.dueDate && (
+                                          <span>Dự kiến: {String(task.dueDate).split("T")[0]}</span>
+                                        )}
+                                        {task.completedAt && (
+                                          <span className="text-emerald-600">Hoàn thành: {String(task.completedAt).split("T")[0]}</span>
+                                        )}
+                                      </div>
                                     </div>
-
-                                    {task.proofImage && (
-                                      <div className="space-y-1">
-                                        <p className="text-[11px] font-medium text-muted-foreground">Ảnh minh chứng</p>
-                                        <img
-                                          src={task.proofImage} alt="Ảnh minh chứng"
-                                          className="max-w-[200px] max-h-[120px] rounded-md border object-cover"
-                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        />
-                                      </div>
-                                    )}
-
-                                    {task.description && (
-                                      <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded-md">{task.description}</p>
-                                    )}
-
-                                    {assignee && (
-                                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary shrink-0">
-                                          {assignee.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-                                        </span>
-                                        {assignee.fullName}
-                                      </div>
+                                    {task.status === "done" ? (
+                                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0 text-[10px] shrink-0 gap-1">
+                                        <CheckCircle2 className="h-3 w-3" /> Hoàn thành
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-[10px] shrink-0">{taskStatusConfig[task.status]?.label || task.status}</Badge>
                                     )}
                                   </div>
-                                );
-                              }) : (
-                                <p className="text-xs text-muted-foreground py-4 text-center">Chưa có công việc nào</p>
-                              )}
-                            </TabsContent>
 
-                            {/* Nhật ký tab */}
-                            <TabsContent value="diary" className="space-y-2 mt-3">
-                              {seasonWorkLogs && seasonWorkLogs.length > 0 ? seasonWorkLogs.map(log => {
-                                const logDate = log.createdAt ? new Date(log.createdAt) : null;
-                                const logUser = users?.find(u => u.id === log.userId);
-                                const imageMatch = log.content.match(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/);
-                                const imageUrl = imageMatch ? imageMatch[1] : null;
-                                const displayContent = log.content.replace(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/, "").trim();
-
-                                return (
-                                  <div key={log.id} className="p-3 border rounded-lg space-y-2">
-                                    <div className="flex items-center gap-2 text-xs flex-wrap">
-                                      {logDate && (
-                                        <span className="font-medium flex items-center gap-1">
-                                          <CalendarDays className="h-3 w-3 text-amber-500" />
-                                          {logDate.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                                        </span>
-                                      )}
-                                      {logUser && (
-                                        <span className="text-muted-foreground">• {logUser.fullName}</span>
-                                      )}
-                                    </div>
-                                    {imageUrl && (
+                                  {task.proofImage && (
+                                    <div className="space-y-1">
+                                      <p className="text-[11px] font-medium text-muted-foreground">Ảnh minh chứng</p>
                                       <img
-                                        src={imageUrl} alt="Ảnh nhật ký"
+                                        src={task.proofImage} alt="Ảnh minh chứng"
                                         className="max-w-[200px] max-h-[120px] rounded-md border object-cover"
                                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                       />
+                                    </div>
+                                  )}
+
+                                  {task.description && (
+                                    <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded-md">{task.description}</p>
+                                  )}
+
+                                  {assignee && (
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary shrink-0">
+                                        {assignee.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                                      </span>
+                                      {assignee.fullName}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }) : (
+                              <p className="text-xs text-muted-foreground py-4 text-center">Chưa có công việc nào</p>
+                            )}
+                          </TabsContent>
+
+                          {/* Nhật ký tab */}
+                          <TabsContent value="diary" className="space-y-2 mt-3">
+                            {seasonWorkLogs && seasonWorkLogs.length > 0 ? seasonWorkLogs.map(log => {
+                              const logDate = log.createdAt ? new Date(log.createdAt) : null;
+                              const logUser = users?.find(u => u.id === log.userId);
+                              const imageMatch = log.content.match(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/);
+                              const imageUrl = imageMatch ? imageMatch[1] : null;
+                              const displayContent = log.content.replace(/📷.*?:\s*(https?:\/\/\S+|\/media\/\S+)/, "").trim();
+
+                              return (
+                                <div key={log.id} className="p-3 border rounded-lg space-y-2">
+                                  <div className="flex items-center gap-2 text-xs flex-wrap">
+                                    {logDate && (
+                                      <span className="font-medium flex items-center gap-1">
+                                        <CalendarDays className="h-3 w-3 text-amber-500" />
+                                        {logDate.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                      </span>
                                     )}
-                                    {displayContent && (
-                                      <p className="text-xs text-muted-foreground">{displayContent}</p>
+                                    {logUser && (
+                                      <span className="text-muted-foreground">• {logUser.fullName}</span>
                                     )}
                                   </div>
-                                );
-                              }) : (
-                                <p className="text-xs text-muted-foreground py-4 text-center">Chưa có nhật ký nào</p>
-                              )}
-                            </TabsContent>
-                          </Tabs>
-                        </CollapsibleContent>
-                      </Collapsible>
+                                  {imageUrl && (
+                                    <img
+                                      src={imageUrl} alt="Ảnh nhật ký"
+                                      className="max-w-[200px] max-h-[120px] rounded-md border object-cover"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                  )}
+                                  {displayContent && (
+                                    <p className="text-xs text-muted-foreground">{displayContent}</p>
+                                  )}
+                                </div>
+                              );
+                            }) : (
+                              <p className="text-xs text-muted-foreground py-4 text-center">Chưa có nhật ký nào</p>
+                            )}
+                          </TabsContent>
+                        </Tabs>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </CardContent>
                 </Card>
               );
