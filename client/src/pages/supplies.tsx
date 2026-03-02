@@ -147,12 +147,15 @@ export default function Supplies() {
   const handleUseSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const useDate = fd.get("useDate") as string;
+    const note = fd.get("note") as string;
+    const fullNote = useDate ? `[${useDate}] ${note}`.trim() : note;
     txMutation.mutate({
       supplyId: useSupplyId,
       seasonId: fd.get("seasonId") as string || null,
       type: "export",
       quantity: parseFloat(fd.get("quantity") as string),
-      note: fd.get("note") as string,
+      note: fullNote,
     });
   };
 
@@ -454,7 +457,13 @@ export default function Supplies() {
                           <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
                             {tx.note && <span>{tx.note}</span>}
                             {season && <span>{season.name}</span>}
-                            {tx.createdAt && <span>{new Date(tx.createdAt).toLocaleDateString("vi-VN")}</span>}
+                            {tx.createdAt && (
+                              <span>
+                                {new Date(tx.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                {" "}
+                                {new Date(tx.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -503,6 +512,16 @@ export default function Supplies() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="use-date">Ngày sử dụng</Label>
+                <Input
+                  id="use-date"
+                  name="useDate"
+                  type="date"
+                  defaultValue={new Date().toISOString().split("T")[0]}
+                  data-testid="input-use-date"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="use-note">Ghi chú</Label>

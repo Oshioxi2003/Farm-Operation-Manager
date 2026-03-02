@@ -207,6 +207,9 @@ export default function Crops() {
       queryClient.invalidateQueries({ queryKey: ["/api/crops"] });
       toast({ title: "Thành công", description: "Đã xóa cây trồng" });
     },
+    onError: (error: Error) => {
+      toast({ title: "Lỗi", description: error.message, variant: "destructive" });
+    },
   });
 
   const filtered = crops?.filter(c => {

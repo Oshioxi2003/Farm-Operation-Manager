@@ -280,6 +280,15 @@ export async function registerRoutes(
   });
 
   app.delete("/api/crops/:id", requireManager, async (req, res) => {
+    // Check if any seasons reference this crop
+    const allSeasons = await storage.getSeasons();
+    const linkedSeasons = allSeasons.filter(s => s.cropId === req.params.id);
+    if (linkedSeasons.length > 0) {
+      const names = linkedSeasons.map(s => s.name).join(", ");
+      return res.status(400).json({
+        message: `Không thể xóa cây trồng vì đang được sử dụng trong mùa vụ: ${names}. Vui lòng xóa các mùa vụ liên quan trước.`,
+      });
+    }
     await storage.deleteCrop(req.params.id);
     res.json({ success: true });
   });

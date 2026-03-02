@@ -3,30 +3,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Sprout, Leaf, Sun, CheckCircle2, Circle, ArrowRight, Image,
-  Plus, Trash2, CalendarDays, MapPin, ChevronRight, Clock, Upload, ClipboardList,
+  Sprout, Leaf, Sun, CheckCircle2, Circle,
+  CalendarDays, MapPin, ChevronRight, Clock, ClipboardList, AlertTriangle,
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import type { Season, Crop, Task, Supply, WorkLog, User } from "@shared/schema";
-
-interface SupplyUsage {
-  supplyId: string;
-  quantity: number;
-}
 
 const stages = [
   { key: "preparation", label: "Chuẩn bị", icon: ClipboardList, color: "text-chart-4" },
@@ -53,45 +46,20 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 export default function SeasonProgress() {
   const { toast } = useToast();
   const { isFarmer, isManager, user } = useAuth();
-  const [diaryOpen, setDiaryOpen] = useState(false);
-  const [diaryContent, setDiaryContent] = useState("");
-  const [diaryImages, setDiaryImages] = useState<string[]>([]);
-  const [pendingSeason, setPendingSeason] = useState<Season | null>(null);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("tasks");
   const [selectedWorkLog, setSelectedWorkLog] = useState<WorkLog | null>(null);
-  const [uploadingDiaryImage, setUploadingDiaryImage] = useState(false);
 
-  const handleDiaryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setUploadingDiaryImage(true);
-    const uploaded: string[] = [];
-    for (const file of Array.from(files)) {
-      try {
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        const res = await apiRequest("POST", "/api/upload/work-logs", { base64, filename: file.name });
-        const data = await res.json();
-        if (data.url) uploaded.push(data.url);
-      } catch {
-        toast({ title: "Lỗi", description: `Không thể tải ${file.name}`, variant: "destructive" });
-      }
-    }
-    setDiaryImages(prev => [...prev, ...uploaded]);
-    setUploadingDiaryImage(false);
-    e.target.value = "";
-  };
+  // Filter states
+  const [filterSeasonId, setFilterSeasonId] = useState<string>("all");
+  const [filterCropId, setFilterCropId] = useState<string>("all");
+  const [filterDate, setFilterDate] = useState<string>("");
 
   const { data: seasons, isLoading } = useQuery<Season[]>({ queryKey: ["/api/seasons"] });
   const { data: crops } = useQuery<Crop[]>({ queryKey: ["/api/crops"] });
   const { data: allTasks } = useQuery<Task[]>({ queryKey: ["/api/tasks"] });
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
   const { data: supplies } = useQuery<Supply[]>({ queryKey: ["/api/supplies"] });
-  const [supplyUsages, setSupplyUsages] = useState<SupplyUsage[]>([]);
 
   // Fetch work logs for selected season
   const { data: seasonWorkLogs } = useQuery<WorkLog[]>({
@@ -102,16 +70,6 @@ export default function SeasonProgress() {
       return res.json();
     },
     enabled: !!selectedSeasonId,
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
-      const res = await apiRequest("PATCH", `/api/seasons/${id}`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
-    },
   });
 
   const taskUpdateMutation = useMutation({
@@ -133,111 +91,53 @@ export default function SeasonProgress() {
 
   const selectedSeason = seasons?.find(s => s.id === selectedSeasonId);
   const selectedCrop = selectedSeason ? crops?.find(c => c.id === selectedSeason.cropId) : null;
-  const seasonTasks = allTasks?.filter(t => t.seasonId === selectedSeasonId) || [];
 
-  // Open diary dialog before advancing
-  const openAdvanceDialog = (season: Season) => {
-    setPendingSeason(season);
-    setDiaryContent("");
-    setDiaryImages([]);
-    setSupplyUsages([]);
-    setDiaryOpen(true);
-  };
-
-  const addSupplyUsage = () => {
-    setSupplyUsages(prev => [...prev, { supplyId: "", quantity: 0 }]);
-  };
-
-  const updateSupplyUsage = (index: number, field: keyof SupplyUsage, value: string | number) => {
-    setSupplyUsages(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
-  };
-
-  const removeSupplyUsage = (index: number) => {
-    setSupplyUsages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Actually advance stage + create work log
-  const confirmAdvance = async () => {
-    if (!pendingSeason) return;
-    const idx = pendingSeason.currentStage ? stageIndex[pendingSeason.currentStage] : 0;
-    const currentStageName = stages[idx]?.label || pendingSeason.currentStage;
-
-    try {
-      const sTasks = allTasks?.filter(t => t.seasonId === pendingSeason.id) || [];
-      const currentStageKey = stages[idx]?.key;
-
-      const currentStageTasks = sTasks.filter(t => t.stage === currentStageKey && t.status !== "done");
-      for (const task of currentStageTasks) {
-        await apiRequest("PATCH", `/api/tasks/${task.id}`, { status: "done" });
-      }
-
-      if (idx < 3) {
-        const nextStage = stages[idx + 1].key as "preparation" | "planting" | "caring" | "harvesting";
-        const progress = Math.min(100, (pendingSeason.progress || 0) + 15);
-        await updateMutation.mutateAsync({ id: pendingSeason.id, data: { currentStage: nextStage, progress, status: "active" } });
-
-        const nextStageTasks = sTasks.filter(t => t.stage === nextStage && t.status === "todo");
-        for (const task of nextStageTasks) {
-          await apiRequest("PATCH", `/api/tasks/${task.id}`, { status: "doing" });
-        }
-      } else {
-        const remainingTasks = sTasks.filter(t => t.status !== "done");
-        for (const task of remainingTasks) {
-          await apiRequest("PATCH", `/api/tasks/${task.id}`, { status: "done" });
-        }
-        await updateMutation.mutateAsync({ id: pendingSeason.id, data: { status: "completed", progress: 100 } });
-      }
-
-      let logContent = diaryContent || `Hoàn thành giai đoạn: ${currentStageName} - ${pendingSeason.name}`;
-      // Gom tất cả ảnh vào cùng 1 nhật ký
-      for (const imgUrl of diaryImages) {
-        logContent += `\n📷 Ảnh minh chứng: ${imgUrl}`;
-      }
-      const logData: Record<string, unknown> = {
-        content: logContent,
-        seasonId: pendingSeason.id,
-        userId: user?.id || null,
-        hoursWorked: null,
-      };
-      await apiRequest("POST", "/api/work-logs", logData);
-
-      const validUsages = supplyUsages.filter(u => u.supplyId && u.quantity > 0);
-      for (const usage of validUsages) {
-        const supply = supplies?.find(s => s.id === usage.supplyId);
-        await apiRequest("POST", "/api/supply-transactions", {
-          supplyId: usage.supplyId,
-          seasonId: pendingSeason.id,
-          type: "export",
-          quantity: usage.quantity,
-          note: `Sử dụng cho giai đoạn ${currentStageName} - ${pendingSeason.name}`,
-        });
-        await apiRequest("POST", "/api/work-logs", {
-          content: `📦 Sử dụng vật tư: ${supply?.name || ""} - ${usage.quantity} ${supply?.unit || ""}`,
-          seasonId: pendingSeason.id,
-          userId: user?.id || null,
-          supplyId: usage.supplyId,
-          supplyQuantity: usage.quantity,
-        });
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/work-logs/season", selectedSeasonId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/supplies"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/supply-transactions"] });
-      toast({ title: "Thành công", description: `Đã chuyển giai đoạn và ghi nhật ký${validUsages.length > 0 ? ` (đã trừ ${validUsages.length} vật tư)` : ""}` });
-    } catch {
-      toast({ title: "Lỗi", description: "Không thể cập nhật", variant: "destructive" });
+  // Get all tasks, then filter
+  const allSeasonTasks = allTasks?.filter(t => {
+    // Filter by selected season (from tab context) OR by filter dropdown
+    if (filterSeasonId !== "all") {
+      if (t.seasonId !== filterSeasonId) return false;
+    } else if (selectedSeasonId) {
+      if (t.seasonId !== selectedSeasonId) return false;
     }
 
-    setDiaryOpen(false);
-    setPendingSeason(null);
-  };
+    // Filter by crop
+    if (filterCropId !== "all") {
+      const taskSeason = seasons?.find(s => s.id === t.seasonId);
+      if (!taskSeason || taskSeason.cropId !== filterCropId) return false;
+    }
 
+    // Filter by date
+    if (filterDate) {
+      const taskDate = t.dueDate ? String(t.dueDate).split("T")[0] : null;
+      if (!taskDate || taskDate > filterDate) return false;
+    }
+
+    return true;
+  }) || [];
+
+  // Handle complete task - auto create work log for farmer
   const handleCompleteTask = async (task: Task) => {
     try {
       await taskUpdateMutation.mutateAsync({ id: task.id, data: { status: "done" } });
-      toast({ title: "Thành công", description: `Đã hoàn thành: ${task.title}` });
+
+      // Auto-create work log entry
+      const season = seasons?.find(s => s.id === task.seasonId);
+      const stageLabel = task.stage ? stages.find(s => s.key === task.stage)?.label || task.stage : "";
+      const logContent = `Hoàn thành công việc: ${task.title}${task.description ? `\n${task.description}` : ""}${stageLabel ? `\nGiai đoạn: ${stageLabel}` : ""}${season ? `\nMùa vụ: ${season.name}` : ""}`;
+
+      await apiRequest("POST", "/api/work-logs", {
+        content: logContent,
+        seasonId: task.seasonId,
+        userId: user?.id || null,
+        taskId: task.id,
+        hoursWorked: null,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/work-logs/season", selectedSeasonId] });
+
+      toast({ title: "Thành công", description: `Đã hoàn thành: ${task.title} và ghi nhật ký sản xuất` });
     } catch {
       toast({ title: "Lỗi", description: "Không thể cập nhật", variant: "destructive" });
     }
@@ -322,7 +222,7 @@ export default function SeasonProgress() {
                     value="tasks"
                     className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 pt-1 text-sm font-medium"
                   >
-                    Công việc <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[11px]">{seasonTasks.length}</Badge>
+                    Công việc <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[11px]">{allSeasonTasks.length}</Badge>
                   </TabsTrigger>
                   <TabsTrigger
                     value="diary"
@@ -333,87 +233,117 @@ export default function SeasonProgress() {
                 </TabsList>
 
                 {/* === CÔNG VIỆC TAB === */}
-                <TabsContent value="tasks" className="space-y-3 mt-0">
-                  {seasonTasks.length > 0 ? seasonTasks.map(task => {
-                    const assignee = users?.find(u => u.id === task.assigneeId);
+                <TabsContent value="tasks" className="space-y-4 mt-0">
+                  {/* Filter bar */}
+                  <Card>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <ClipboardList className="h-4 w-4" /> Bộ lọc
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Mùa vụ</label>
+                          <Select value={filterSeasonId} onValueChange={setFilterSeasonId}>
+                            <SelectTrigger className="h-9 text-sm">
+                              <SelectValue placeholder="Tất cả" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Tất cả</SelectItem>
+                              {seasons?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Cây trồng</label>
+                          <Select value={filterCropId} onValueChange={setFilterCropId}>
+                            <SelectTrigger className="h-9 text-sm">
+                              <SelectValue placeholder="Tất cả" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Tất cả</SelectItem>
+                              {crops?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Thời gian</label>
+                          <Input
+                            type="date"
+                            value={filterDate}
+                            onChange={(e) => setFilterDate(e.target.value)}
+                            className="h-9 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Task list */}
+                  {allSeasonTasks.length > 0 ? allSeasonTasks.map(task => {
+                    const season = seasons?.find(s => s.id === task.seasonId);
+                    const crop = season ? crops?.find(c => c.id === season.cropId) : null;
                     const stgCfg = stageBadgeConfig[task.stage || "planting"] || stageBadgeConfig.planting;
+                    const stageLabel = stages.find(s => s.key === task.stage)?.label || task.stage || "";
+                    const isDone = task.status === "done";
+                    const isTodo = task.status === "todo";
 
                     return (
-                      <Card key={task.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                      <Card
+                        key={task.id}
+                        className={`overflow-hidden border-l-4 ${isDone ? "border-l-emerald-500" : "border-l-emerald-400"} hover:shadow-md transition-shadow`}
+                      >
                         <CardContent className="p-4 space-y-3">
-                          {/* Task header */}
+                          {/* Row 1: Title + Stage label */}
                           <div className="flex items-start justify-between gap-2">
-                            <div className="space-y-1">
-                              <h4 className="font-semibold text-sm">{task.title}</h4>
-                              <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                                <Badge className={`${stgCfg.color} border-0 text-[11px] font-medium px-2 py-0`}>
-                                  {stgCfg.label}
-                                </Badge>
-                                {task.dueDate && (
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" /> Dự kiến: {String(task.dueDate).split("T")[0]}
-                                  </span>
-                                )}
-                                {task.completedAt && (
-                                  <span className="flex items-center gap-1 text-emerald-600">
-                                    <CheckCircle2 className="h-3 w-3" /> Hoàn thành: {String(task.completedAt).split("T")[0]}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Action button */}
-                            {task.status === "done" ? (
-                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0 text-xs shrink-0 gap-1">
-                                <CheckCircle2 className="h-3 w-3" /> Hoàn thành
-                              </Badge>
-                            ) : isFarmer && task.status !== "todo" ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-7 shrink-0 gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                                onClick={() => handleCompleteTask(task)}
-                                disabled={taskUpdateMutation.isPending}
-                              >
-                                <CheckCircle2 className="h-3 w-3" />
-                                {task.stage === "harvesting" ? "Chưa thực hiện" : "Hoàn thành"}
-                              </Button>
-                            ) : isFarmer && task.status === "todo" ? (
-                              <Badge variant="outline" className="text-xs shrink-0 gap-1">
-                                <Clock className="h-3 w-3" /> Chờ thực hiện
-                              </Badge>
-                            ) : null}
+                            <h4 className="font-bold text-base">{task.title}</h4>
+                            <span className="text-sm font-medium text-emerald-600 shrink-0">{stageLabel}</span>
                           </div>
 
-                          {/* Proof image */}
-                          {task.proofImage && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-medium text-muted-foreground">Ảnh minh chứng</p>
-                              <img
-                                src={task.proofImage}
-                                alt="Ảnh minh chứng"
-                                className="max-w-[280px] max-h-[160px] rounded-lg border object-cover"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                              />
-                            </div>
+                          {/* Row 2: Status badge */}
+                          {isDone ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0 text-xs font-medium gap-1">
+                              <CheckCircle2 className="h-3 w-3" /> Đã hoàn thành
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 border-0 text-xs font-medium gap-1">
+                              <AlertTriangle className="h-3 w-3" /> Chưa thực hiện
+                            </Badge>
                           )}
 
-                          {/* Description / notes */}
-                          {task.description && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Ghi chú</p>
-                              <p className="text-sm text-muted-foreground bg-muted/30 p-2.5 rounded-md">{task.description}</p>
-                            </div>
-                          )}
-
-                          {/* Assignee */}
-                          {assignee && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary shrink-0">
-                                {assignee.fullName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                          {/* Row 3: Meta info */}
+                          <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+                            {task.dueDate && (
+                              <span className="flex items-center gap-1">
+                                <CalendarDays className="h-3 w-3" /> {String(task.dueDate).split("T")[0]}
                               </span>
-                              {assignee.fullName}
-                            </div>
+                            )}
+                            {season && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> {season.name}
+                              </span>
+                            )}
+                            {crop && (
+                              <span className="flex items-center gap-1">
+                                <Sprout className="h-3 w-3" /> {crop.name}
+                              </span>
+                            )}
+                            {season?.cultivationZone && (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" /> {season.cultivationZone}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Row 4: Complete button (farmer only, not done) */}
+                          {isFarmer && !isDone && (
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6"
+                              onClick={() => handleCompleteTask(task)}
+                              disabled={taskUpdateMutation.isPending}
+                            >
+                              Hoàn thành
+                            </Button>
                           )}
                         </CardContent>
                       </Card>
@@ -423,32 +353,6 @@ export default function SeasonProgress() {
                       <Circle className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
                       <p className="text-sm text-muted-foreground">Chưa có công việc nào</p>
                     </div>
-                  )}
-
-                  {/* Advance stage button */}
-                  {selectedSeason.status !== "completed" && isFarmer && (
-                    <div className="pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openAdvanceDialog(selectedSeason)}
-                        disabled={updateMutation.isPending}
-                        data-testid={`button-advance-${selectedSeason.id}`}
-                        className="w-full justify-center"
-                      >
-                        {(selectedSeason.currentStage ? stageIndex[selectedSeason.currentStage] : 0) < 3 ? (
-                          <>Chuyển sang {stages[(selectedSeason.currentStage ? stageIndex[selectedSeason.currentStage] : 0) + 1].label} <ArrowRight className="ml-1 h-3 w-3" /></>
-                        ) : (
-                          <>Hoàn thành mùa vụ <CheckCircle2 className="ml-1 h-3 w-3" /></>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-
-                  {selectedSeason.status !== "completed" && !isFarmer && (
-                    <p className="text-xs text-muted-foreground italic text-center pt-2">
-                      Chỉ nông dân được giao mới có thể chuyển giai đoạn
-                    </p>
                   )}
                 </TabsContent>
 
@@ -549,157 +453,6 @@ export default function SeasonProgress() {
           )}
         </div>
 
-        {/* Diary entry dialog when advancing stage */}
-        <Dialog open={diaryOpen} onOpenChange={(o) => { setDiaryOpen(o); if (!o) setPendingSeason(null); }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                Ghi nhật ký giai đoạn
-                {pendingSeason && ` - ${pendingSeason.name}`}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              {pendingSeason && (
-                <div className="p-3 bg-muted/30 rounded-md text-sm">
-                  <p>Giai đoạn hiện tại: <strong>{stages[stageIndex[pendingSeason.currentStage || "planting"]]?.label}</strong></p>
-                  <p className="text-muted-foreground">
-                    {(stageIndex[pendingSeason.currentStage || "planting"] || 0) < 2
-                      ? `→ Chuyển sang: ${stages[(stageIndex[pendingSeason.currentStage || "planting"] || 0) + 1]?.label}`
-                      : "→ Hoàn thành mùa vụ"}
-                  </p>
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <Label htmlFor="diary-content">Nội dung nhật ký</Label>
-                <Textarea
-                  id="diary-content"
-                  placeholder="Mô tả công việc đã làm, kết quả, ghi chú..."
-                  rows={4}
-                  value={diaryContent}
-                  onChange={(e) => setDiaryContent(e.target.value)}
-                  data-testid="input-diary-content"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1">
-                  <Image className="h-3.5 w-3.5" /> Ảnh minh chứng
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="diary-image"
-                    placeholder="Dán URL ảnh..."
-                    className="flex-1"
-                    data-testid="input-diary-image"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const val = (e.target as HTMLInputElement).value.trim();
-                        if (val) { setDiaryImages(prev => [...prev, val]); (e.target as HTMLInputElement).value = ''; }
-                      }
-                    }}
-                  />
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-xs font-medium cursor-pointer hover:bg-muted transition-colors shrink-0">
-                    <Upload className="h-3.5 w-3.5" />
-                    {uploadingDiaryImage ? "Đang tải..." : "Tải ảnh"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={handleDiaryImageUpload}
-                      disabled={uploadingDiaryImage}
-                    />
-                  </label>
-                </div>
-                {diaryImages.length > 0 && (
-                  <div className="flex gap-2 flex-wrap">
-                    {diaryImages.map((url, i) => (
-                      <div key={i} className="relative inline-block">
-                        <img
-                          src={url}
-                          alt={`Preview ${i + 1}`}
-                          className="w-[80px] h-[60px] rounded-md border object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setDiaryImages(prev => prev.filter((_, idx) => idx !== i))}
-                          className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full h-4 w-4 flex items-center justify-center text-[10px]"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Supply usage section */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Vật tư sử dụng</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={addSupplyUsage} className="h-7 text-xs">
-                    <Plus className="mr-1 h-3 w-3" /> Thêm vật tư
-                  </Button>
-                </div>
-                {supplyUsages.length > 0 ? (
-                  <div className="space-y-2">
-                    {supplyUsages.map((usage, index) => {
-                      const selectedSupply = supplies?.find(s => s.id === usage.supplyId);
-                      return (
-                        <div key={index} className="flex items-center gap-2 p-2 rounded-md bg-muted/30">
-                          <div className="flex-1">
-                            <Select value={usage.supplyId} onValueChange={(v) => updateSupplyUsage(index, "supplyId", v)}>
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder="Chọn vật tư..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {supplies?.filter(s => s.currentStock > 0).map(s => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {s.name} (tồn: {s.currentStock} {s.unit})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="w-24">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={selectedSupply?.currentStock || 999}
-                              step={0.1}
-                              placeholder="SL"
-                              className="h-8 text-xs"
-                              value={usage.quantity || ""}
-                              onChange={(e) => updateSupplyUsage(index, "quantity", parseFloat(e.target.value) || 0)}
-                            />
-                          </div>
-                          {selectedSupply && (
-                            <span className="text-[10px] text-muted-foreground w-8">{selectedSupply.unit}</span>
-                          )}
-                          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => removeSupplyUsage(index)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Chưa có vật tư nào được chọn</p>
-                )}
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={confirmAdvance}
-                disabled={updateMutation.isPending}
-                data-testid="button-confirm-advance"
-              >
-                {updateMutation.isPending ? "Đang xử lý..." : "Xác nhận & Ghi nhật ký"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </ScrollArea>
 
       {/* Work log detail dialog */}
@@ -722,9 +475,6 @@ export default function SeasonProgress() {
             const imgUrls = foundUrls.filter(u => imgExt.test(u));
             const taskImg = task?.proofImage ? [task.proofImage] : [];
             const allImgs = Array.from(new Set([...taskImg, ...imgUrls]));
-
-            // Split content for link rendering
-            const contentParts = wl.content.split(urlPattern);
 
             return (
               <div className="space-y-5">
