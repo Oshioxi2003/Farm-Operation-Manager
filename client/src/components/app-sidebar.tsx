@@ -36,7 +36,6 @@ export function AppSidebar() {
           </div>
           <div>
             <p className="text-sm font-semibold" data-testid="text-app-name">SmartFarm</p>
-            <p className="text-xs text-muted-foreground">Quản lý nông nghiệp</p>
           </div>
         </div>
       </SidebarHeader>
