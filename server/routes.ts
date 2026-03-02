@@ -453,6 +453,16 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Bạn chỉ có thể cập nhật trạng thái công việc" });
       }
       const task = await storage.updateTask(req.params.id, allowed as any);
+
+      // Auto-recalculate season progress based on completed tasks
+      if (allowed.status === "done" && existingTask.seasonId) {
+        const seasonTasks = await storage.getTasksBySeason(existingTask.seasonId);
+        const totalTasks = seasonTasks.length;
+        const doneTasks = seasonTasks.filter(t => t.status === "done").length;
+        const newProgress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+        await storage.updateSeason(existingTask.seasonId, { progress: newProgress } as any);
+      }
+
       return res.json(task);
     }
 

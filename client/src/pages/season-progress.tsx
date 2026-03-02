@@ -194,6 +194,7 @@ export default function SeasonProgress() {
 
       queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/work-logs/season", selectedSeasonId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/seasons"] });
 
       toast({ title: "Thành công", description: `Đã hoàn thành: ${completingTask.title} và ghi nhật ký sản xuất` });
       setCompletingTask(null);
@@ -347,6 +348,7 @@ export default function SeasonProgress() {
                     const stageLabel = stages.find(s => s.key === task.stage)?.label || task.stage || "";
                     const isDone = task.status === "done";
                     const isTodo = task.status === "todo";
+                    const isMyTask = !task.assigneeId || task.assigneeId === user?.id;
 
                     return (
                       <Card
@@ -395,8 +397,8 @@ export default function SeasonProgress() {
                             )}
                           </div>
 
-                          {/* Row 4: Complete button (farmer only, not done) */}
-                          {isFarmer && !isDone && (
+                          {/* Row 4: Complete button (farmer only, assigned to me, not done) */}
+                          {isFarmer && !isDone && isMyTask && (
                             <Button
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6"
