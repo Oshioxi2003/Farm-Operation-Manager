@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
@@ -13,9 +14,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   Sprout, Leaf, Sun, CheckCircle2, Circle,
-  CalendarDays, MapPin, ChevronRight, Clock, ClipboardList, AlertTriangle,
+  CalendarDays, MapPin, ChevronRight, Clock, ClipboardList, AlertTriangle, Upload,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
@@ -49,6 +50,16 @@ export default function SeasonProgress() {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("tasks");
   const [selectedWorkLog, setSelectedWorkLog] = useState<WorkLog | null>(null);
+
+  // Complete task dialog states
+  const [completingTask, setCompletingTask] = useState<Task | null>(null);
+  const [completeDescription, setCompleteDescription] = useState("");
+  const [completeGrowthNotes, setCompleteGrowthNotes] = useState("");
+  const [completeHarvestYield, setCompleteHarvestYield] = useState("");
+  const [completeImageFile, setCompleteImageFile] = useState<File | null>(null);
+  const [completeImagePreview, setCompleteImagePreview] = useState<string | null>(null);
+  const [isSubmittingComplete, setIsSubmittingComplete] = useState(false);
+  const completeFileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter states
   const [filterSeasonId, setFilterSeasonId] = useState<string>("all");
@@ -116,30 +127,80 @@ export default function SeasonProgress() {
     return true;
   }) || [];
 
-  // Handle complete task - auto create work log for farmer
-  const handleCompleteTask = async (task: Task) => {
-    try {
-      await taskUpdateMutation.mutateAsync({ id: task.id, data: { status: "done" } });
+  // Open complete task dialog
+  const openCompleteDialog = (task: Task) => {
+    setCompletingTask(task);
+    setCompleteDescription("");
+    setCompleteGrowthNotes("");
+    setCompleteHarvestYield("");
+    setCompleteImageFile(null);
+    setCompleteImagePreview(null);
+  };
 
-      // Auto-create work log entry
-      const season = seasons?.find(s => s.id === task.seasonId);
-      const stageLabel = task.stage ? stages.find(s => s.key === task.stage)?.label || task.stage : "";
-      const logContent = `Hoàn thành công việc: ${task.title}${task.description ? `\n${task.description}` : ""}${stageLabel ? `\nGiai đoạn: ${stageLabel}` : ""}${season ? `\nMùa vụ: ${season.name}` : ""}`;
+  const handleCompleteImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Lỗi", description: "File không được vượt quá 5MB", variant: "destructive" });
+      return;
+    }
+    setCompleteImageFile(file);
+    setCompleteImagePreview(URL.createObjectURL(file));
+  };
+
+  // Handle complete task - with dialog form data
+  const handleCompleteTask = async () => {
+    if (!completingTask) return;
+    setIsSubmittingComplete(true);
+    try {
+      let imageUrl = "";
+
+      // Upload image if selected
+      if (completeImageFile) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(completeImageFile);
+        });
+        const uploadRes = await apiRequest("POST", "/api/upload/work-logs", {
+          data: base64,
+          filename: completeImageFile.name,
+        });
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.url;
+      }
+
+      await taskUpdateMutation.mutateAsync({ id: completingTask.id, data: { status: "done" } });
+
+      // Build work log content
+      const season = seasons?.find(s => s.id === completingTask.seasonId);
+      const stageLabel = completingTask.stage ? stages.find(s => s.key === completingTask.stage)?.label || completingTask.stage : "";
+      const parts: string[] = [];
+      parts.push(`Hoàn thành công việc: ${completingTask.title}`);
+      if (completeDescription.trim()) parts.push(`Mô tả: ${completeDescription.trim()}`);
+      if (stageLabel) parts.push(`Giai đoạn: ${stageLabel}`);
+      if (season) parts.push(`Mùa vụ: ${season.name}`);
+      if (completeGrowthNotes.trim()) parts.push(`Ghi chú sinh trưởng: ${completeGrowthNotes.trim()}`);
+      if (completeHarvestYield.trim()) parts.push(`Sản lượng thu hoạch: ${completeHarvestYield.trim()} kg`);
+      if (imageUrl) parts.push(`📷 Ảnh minh chứng: ${imageUrl}`);
 
       await apiRequest("POST", "/api/work-logs", {
-        content: logContent,
-        seasonId: task.seasonId,
+        content: parts.join("\n"),
+        seasonId: completingTask.seasonId,
         userId: user?.id || null,
-        taskId: task.id,
+        taskId: completingTask.id,
         hoursWorked: null,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/work-logs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/work-logs/season", selectedSeasonId] });
 
-      toast({ title: "Thành công", description: `Đã hoàn thành: ${task.title} và ghi nhật ký sản xuất` });
+      toast({ title: "Thành công", description: `Đã hoàn thành: ${completingTask.title} và ghi nhật ký sản xuất` });
+      setCompletingTask(null);
     } catch {
       toast({ title: "Lỗi", description: "Không thể cập nhật", variant: "destructive" });
+    } finally {
+      setIsSubmittingComplete(false);
     }
   };
 
@@ -339,7 +400,7 @@ export default function SeasonProgress() {
                             <Button
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6"
-                              onClick={() => handleCompleteTask(task)}
+                              onClick={() => openCompleteDialog(task)}
                               disabled={taskUpdateMutation.isPending}
                             >
                               Hoàn thành
@@ -605,6 +666,109 @@ export default function SeasonProgress() {
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Complete task confirmation dialog */}
+      <Dialog open={!!completingTask} onOpenChange={(o) => { if (!o) setCompletingTask(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Xác nhận hoàn thành</DialogTitle>
+            {completingTask && (
+              <p className="text-sm text-muted-foreground">{user?.fullName || ""}</p>
+            )}
+          </DialogHeader>
+          {completingTask && (
+            <div className="space-y-5 pt-2">
+              {/* Image upload */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Ảnh minh chứng <span className="text-red-500">*</span>
+                </label>
+                <input
+                  ref={completeFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpg,image/jpeg"
+                  className="hidden"
+                  onChange={handleCompleteImageChange}
+                />
+                {completeImagePreview ? (
+                  <div
+                    className="relative border-2 border-dashed border-gray-300 rounded-lg p-2 cursor-pointer hover:border-gray-400 transition-colors"
+                    onClick={() => completeFileInputRef.current?.click()}
+                  >
+                    <img
+                      src={completeImagePreview}
+                      alt="Preview"
+                      className="w-full max-h-[180px] object-contain rounded-md"
+                    />
+                    <p className="text-xs text-center text-muted-foreground mt-1">Click để thay đổi ảnh</p>
+                  </div>
+                ) : (
+                  <div
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 transition-colors"
+                    onClick={() => completeFileInputRef.current?.click()}
+                  >
+                    <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500 font-medium">Click để tải lên file</p>
+                    <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, JPEG (tối đa 5MB)</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Work description */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mô tả công việc</label>
+                <Textarea
+                  placeholder="Nhập mô tả công việc đã thực hiện..."
+                  value={completeDescription}
+                  onChange={(e) => setCompleteDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              {/* Growth notes */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Ghi chú sinh trưởng</label>
+                <Textarea
+                  placeholder="Nhập ghi chú về sinh trưởng của cây trồng..."
+                  value={completeGrowthNotes}
+                  onChange={(e) => setCompleteGrowthNotes(e.target.value)}
+                  rows={4}
+                />
+              </div>
+
+              {/* Harvest yield */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Sản lượng thu hoạch (kg)</label>
+                <Input
+                  type="text"
+                  placeholder="Nhập sản lượng thực tế (nếu có)"
+                  value={completeHarvestYield}
+                  onChange={(e) => setCompleteHarvestYield(e.target.value)}
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setCompletingTask(null)}
+                  disabled={isSubmittingComplete}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={handleCompleteTask}
+                  disabled={isSubmittingComplete || !completeImageFile}
+                >
+                  {isSubmittingComplete ? "Đang xử lý..." : "Xác nhận"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>
