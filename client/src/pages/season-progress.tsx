@@ -56,8 +56,8 @@ export default function SeasonProgress() {
   const [completeDescription, setCompleteDescription] = useState("");
   const [completeGrowthNotes, setCompleteGrowthNotes] = useState("");
   const [completeHarvestYield, setCompleteHarvestYield] = useState("");
-  const [completeImageFile, setCompleteImageFile] = useState<File | null>(null);
-  const [completeImagePreview, setCompleteImagePreview] = useState<string | null>(null);
+  const [completeImageFiles, setCompleteImageFiles] = useState<File[]>([]);
+  const [completeImagePreviews, setCompleteImagePreviews] = useState<string[]>([]);
   const [isSubmittingComplete, setIsSubmittingComplete] = useState(false);
   const completeFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -133,19 +133,33 @@ export default function SeasonProgress() {
     setCompleteDescription("");
     setCompleteGrowthNotes("");
     setCompleteHarvestYield("");
-    setCompleteImageFile(null);
-    setCompleteImagePreview(null);
+    setCompleteImageFiles([]);
+    setCompleteImagePreviews([]);
   };
 
   const handleCompleteImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Lỗi", description: "File không được vượt quá 5MB", variant: "destructive" });
-      return;
+    const files = Array.from(e.target.files || []);
+    const validFiles: File[] = [];
+    const validPreviews: string[] = [];
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "Lỗi", description: `${file.name} vượt quá 5MB`, variant: "destructive" });
+        continue;
+      }
+      validFiles.push(file);
+      validPreviews.push(URL.createObjectURL(file));
     }
-    setCompleteImageFile(file);
-    setCompleteImagePreview(URL.createObjectURL(file));
+    if (validFiles.length > 0) {
+      setCompleteImageFiles(prev => [...prev, ...validFiles]);
+      setCompleteImagePreviews(prev => [...prev, ...validPreviews]);
+    }
+    // Reset input so same file can be selected again
+    e.target.value = "";
+  };
+
+  const removeCompleteImage = (index: number) => {
+    setCompleteImageFiles(prev => prev.filter((_, i) => i !== index));
+    setCompleteImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   // Handle complete task - with dialog form data
@@ -153,21 +167,21 @@ export default function SeasonProgress() {
     if (!completingTask) return;
     setIsSubmittingComplete(true);
     try {
-      let imageUrl = "";
+      const imageUrls: string[] = [];
 
-      // Upload image if selected
-      if (completeImageFile) {
+      // Upload all images
+      for (const file of completeImageFiles) {
         const reader = new FileReader();
         const base64 = await new Promise<string>((resolve) => {
           reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(completeImageFile);
+          reader.readAsDataURL(file);
         });
         const uploadRes = await apiRequest("POST", "/api/upload/work-logs", {
           data: base64,
-          filename: completeImageFile.name,
+          filename: file.name,
         });
         const uploadData = await uploadRes.json();
-        imageUrl = uploadData.url;
+        imageUrls.push(uploadData.url);
       }
 
       await taskUpdateMutation.mutateAsync({ id: completingTask.id, data: { status: "done" } });
@@ -182,7 +196,9 @@ export default function SeasonProgress() {
       if (season) parts.push(`Mùa vụ: ${season.name}`);
       if (completeGrowthNotes.trim()) parts.push(`Ghi chú sinh trưởng: ${completeGrowthNotes.trim()}`);
       if (completeHarvestYield.trim()) parts.push(`Sản lượng thu hoạch: ${completeHarvestYield.trim()} kg`);
-      if (imageUrl) parts.push(`📷 Ảnh minh chứng: ${imageUrl}`);
+      for (const url of imageUrls) {
+        parts.push(`📷 Ảnh minh chứng: ${url}`);
+      }
 
       await apiRequest("POST", "/api/work-logs", {
         content: parts.join("\n"),
@@ -685,37 +701,44 @@ export default function SeasonProgress() {
               {/* Image upload */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
-                  Ảnh minh chứng <span className="text-red-500">*</span>
+                  Ảnh minh chứng
                 </label>
                 <input
                   ref={completeFileInputRef}
                   type="file"
                   accept="image/png,image/jpg,image/jpeg"
+                  multiple
                   className="hidden"
                   onChange={handleCompleteImageChange}
                 />
-                {completeImagePreview ? (
-                  <div
-                    className="relative border-2 border-dashed border-gray-300 rounded-lg p-2 cursor-pointer hover:border-gray-400 transition-colors"
-                    onClick={() => completeFileInputRef.current?.click()}
-                  >
-                    <img
-                      src={completeImagePreview}
-                      alt="Preview"
-                      className="w-full max-h-[180px] object-contain rounded-md"
-                    />
-                    <p className="text-xs text-center text-muted-foreground mt-1">Click để thay đổi ảnh</p>
-                  </div>
-                ) : (
-                  <div
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 transition-colors"
-                    onClick={() => completeFileInputRef.current?.click()}
-                  >
-                    <Upload className="h-8 w-8 text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500 font-medium">Click để tải lên file</p>
-                    <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, JPEG (tối đa 5MB)</p>
+                {completeImagePreviews.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {completeImagePreviews.map((preview, idx) => (
+                      <div key={idx} className="relative group">
+                        <img
+                          src={preview}
+                          alt={`Ảnh ${idx + 1}`}
+                          className="w-20 h-20 object-cover rounded-lg border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeCompleteImage(idx)}
+                          className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 transition-colors"
+                  onClick={() => completeFileInputRef.current?.click()}
+                >
+                  <Upload className="h-7 w-7 text-gray-400 mb-1.5" />
+                  <p className="text-sm text-gray-500 font-medium">Click để tải lên file</p>
+                  <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, JPEG (tối đa 5MB/ảnh)</p>
+                </div>
               </div>
 
               {/* Work description */}
@@ -764,7 +787,7 @@ export default function SeasonProgress() {
                 <Button
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                   onClick={handleCompleteTask}
-                  disabled={isSubmittingComplete || !completeImageFile}
+                  disabled={isSubmittingComplete}
                 >
                   {isSubmittingComplete ? "Đang xử lý..." : "Xác nhận"}
                 </Button>

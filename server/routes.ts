@@ -232,6 +232,13 @@ export async function registerRoutes(
     res.json(users);
   });
 
+  app.get("/api/users/:id", requireManager, async (req, res) => {
+    const user = await storage.getUser(req.params.id);
+    if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    const { password, ...safeUser } = user as any;
+    res.json(safeUser);
+  });
+
   app.post("/api/users", requireManager, async (req, res) => {
     const parsed = insertUserSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
