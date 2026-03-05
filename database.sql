@@ -1,19 +1,26 @@
--- MySQL dump 10.13  Distrib 8.0.44, for Win64 (x86_64)
+-- Farm Operation Manager - Database SQL
+-- Compatible with MySQL 5.7+ / phpMyAdmin
 --
--- Host: shuttle.proxy.rlwy.net    Database: railway
+-- Database: farm
 -- ------------------------------------------------------
--- Server version	9.4.0
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET AUTOCOMMIT = 0;
+START TRANSACTION;
+SET time_zone = "+00:00";
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8 */;
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
-/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40101 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
-/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
-/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+
+--
+-- Database: `farm`
+--
+CREATE DATABASE IF NOT EXISTS `farm` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE `farm`;
 
 --
 -- Table structure for table `alerts`
@@ -23,16 +30,16 @@ DROP TABLE IF EXISTS `alerts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `alerts` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `type` enum('low_stock','overdue_task','weather','stage_change') NOT NULL,
   `severity` enum('info','warning','critical') NOT NULL DEFAULT 'info',
   `title` text NOT NULL,
   `message` text NOT NULL,
   `is_read` tinyint(1) DEFAULT '0',
   `related_id` varchar(36) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT (now()),
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -52,7 +59,7 @@ DROP TABLE IF EXISTS `climate_readings`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `climate_readings` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `temperature` float DEFAULT NULL,
   `humidity` float DEFAULT NULL,
   `rainfall` float DEFAULT NULL,
@@ -61,9 +68,9 @@ CREATE TABLE `climate_readings` (
   `soil_ph` float DEFAULT NULL,
   `wind_speed` float DEFAULT NULL,
   `location` varchar(100) DEFAULT NULL,
-  `recorded_at` timestamp NULL DEFAULT (now()),
+  `recorded_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -84,7 +91,7 @@ DROP TABLE IF EXISTS `crops`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `crops` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `name` text NOT NULL,
   `variety` text,
   `description` text,
@@ -95,7 +102,7 @@ CREATE TABLE `crops` (
   `care_instructions` text,
   `image` text,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -116,17 +123,17 @@ DROP TABLE IF EXISTS `notifications`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `notifications` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `target_user_id` varchar(36) DEFAULT NULL,
   `title` text NOT NULL,
   `message` text NOT NULL,
   `is_read` tinyint(1) DEFAULT '0',
   `related_id` varchar(36) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT (now()),
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `notifications_target_user_id_users_id_fk` (`target_user_id`),
   CONSTRAINT `notifications_target_user_id_users_id_fk` FOREIGN KEY (`target_user_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -147,7 +154,7 @@ DROP TABLE IF EXISTS `seasons`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `seasons` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `name` text NOT NULL,
   `crop_id` varchar(36) DEFAULT NULL,
   `status` enum('planning','active','completed') NOT NULL DEFAULT 'planning',
@@ -155,7 +162,7 @@ CREATE TABLE `seasons` (
   `start_date` date DEFAULT NULL,
   `end_date` date DEFAULT NULL,
   `area` float DEFAULT NULL,
-  `area_unit` text DEFAULT (_utf8mb4'ha'),
+  `area_unit` text DEFAULT NULL,
   `notes` text,
   `progress` int DEFAULT '0',
   `estimated_yield` float DEFAULT NULL,
@@ -163,7 +170,7 @@ CREATE TABLE `seasons` (
   PRIMARY KEY (`id`),
   KEY `seasons_crop_id_crops_id_fk` (`crop_id`),
   CONSTRAINT `seasons_crop_id_crops_id_fk` FOREIGN KEY (`crop_id`) REFERENCES `crops` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -184,7 +191,7 @@ DROP TABLE IF EXISTS `supplies`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `supplies` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `name` text NOT NULL,
   `category` text,
   `unit` text NOT NULL,
@@ -192,7 +199,7 @@ CREATE TABLE `supplies` (
   `min_threshold` float DEFAULT '0',
   `status` enum('ok','low','out') DEFAULT 'ok',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -213,19 +220,19 @@ DROP TABLE IF EXISTS `supply_transactions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `supply_transactions` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `supply_id` varchar(36) DEFAULT NULL,
   `season_id` varchar(36) DEFAULT NULL,
   `type` text NOT NULL,
   `quantity` float NOT NULL,
   `note` text,
-  `created_at` timestamp NULL DEFAULT (now()),
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `supply_transactions_supply_id_supplies_id_fk` (`supply_id`),
   KEY `supply_transactions_season_id_seasons_id_fk` (`season_id`),
   CONSTRAINT `supply_transactions_season_id_seasons_id_fk` FOREIGN KEY (`season_id`) REFERENCES `seasons` (`id`),
   CONSTRAINT `supply_transactions_supply_id_supplies_id_fk` FOREIGN KEY (`supply_id`) REFERENCES `supplies` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -246,7 +253,7 @@ DROP TABLE IF EXISTS `tasks`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `tasks` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `title` text NOT NULL,
   `description` text,
   `season_id` varchar(36) DEFAULT NULL,
@@ -256,7 +263,7 @@ CREATE TABLE `tasks` (
   `stage` enum('preparation','planting','caring','harvesting') DEFAULT NULL,
   `due_date` date DEFAULT NULL,
   `completed_at` timestamp NULL DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT (now()),
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `proof_image` text,
   `harvest_yield` float DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -264,7 +271,7 @@ CREATE TABLE `tasks` (
   KEY `tasks_assignee_id_users_id_fk` (`assignee_id`),
   CONSTRAINT `tasks_assignee_id_users_id_fk` FOREIGN KEY (`assignee_id`) REFERENCES `users` (`id`),
   CONSTRAINT `tasks_season_id_seasons_id_fk` FOREIGN KEY (`season_id`) REFERENCES `seasons` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -285,7 +292,7 @@ DROP TABLE IF EXISTS `users`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `username` text NOT NULL,
   `password` text NOT NULL,
   `full_name` text NOT NULL,
@@ -294,7 +301,7 @@ CREATE TABLE `users` (
   `avatar` text,
   `is_locked` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -315,13 +322,13 @@ DROP TABLE IF EXISTS `work_logs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `work_logs` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `id` varchar(36) NOT NULL,
   `task_id` varchar(36) DEFAULT NULL,
   `season_id` varchar(36) DEFAULT NULL,
   `user_id` varchar(36) DEFAULT NULL,
   `content` text NOT NULL,
   `hours_worked` float DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT (now()),
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `supply_id` varchar(36) DEFAULT NULL,
   `supply_quantity` float DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -333,7 +340,7 @@ CREATE TABLE `work_logs` (
   CONSTRAINT `work_logs_supply_id_supplies_id_fk` FOREIGN KEY (`supply_id`) REFERENCES `supplies` (`id`),
   CONSTRAINT `work_logs_task_id_tasks_id_fk` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`),
   CONSTRAINT `work_logs_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -345,14 +352,10 @@ LOCK TABLES `work_logs` WRITE;
 INSERT INTO `work_logs` VALUES ('227bce8f-6a33-42c8-8c6d-c568e03aec35','206b5d39-cce9-43bb-b8e2-3772408e8d69','975f882e-c98c-45eb-9cf1-fd718a50aad7','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành công việc: gieo trồng\nGiai đoạn: Gieo trồng\nMùa vụ: Dưa hấu 2026 (Mới)',NULL,'2026-03-02 15:03:54',NULL,NULL),('2668b305-e39d-46d7-9b58-9bb27d5bc1cf','8b255c3e-fd44-4086-9421-0274fb19254e','1f8b25c5-f717-4dc9-816d-15f2669b4c28','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành: Làm cỏ',NULL,'2026-03-02 16:16:07',NULL,NULL),('33d49498-4d03-4d94-a9ad-c7279881424c',NULL,'ed6567cd-2878-4c44-b6c2-86818532bbeb','9e806cf6-13f2-11f1-82dd-02509507bd80','Hoàn thành giai đoạn: Gieo trồng - Dưa hấu 2026',NULL,'2026-03-02 09:32:51',NULL,NULL),('3d58f655-591e-49b1-b67d-32e3d6e86ab2','e59b72bf-5ee5-484a-827c-a3c977cdd892','8729c462-c5e5-41be-a792-4b2173cf34f1','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành: Chuẩn bị đất',NULL,'2026-03-02 16:18:27',NULL,NULL),('6a6dba29-be6d-44d5-a139-3b72f74e4fbd',NULL,'fb0cebec-8efc-4c1a-98a3-a4d1f0847ef8','9e806cf6-13f2-11f1-82dd-02509507bd80','Hoàn thành giai đoạn: Thu hoạch - Lạc hè 2026',NULL,'2026-03-02 09:35:09',NULL,NULL),('6b54db68-be50-47e9-a75c-e2fe04525ee0',NULL,'fb0cebec-8efc-4c1a-98a3-a4d1f0847ef8','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành giai đoạn: Gieo trồng - Lạc hè 2026',NULL,'2026-03-02 07:00:35',NULL,NULL),('7c031661-dcd6-4926-8a04-52b8e3d0ed79','46cf65e4-17e6-4ae6-9e03-1e92556c5cc4','1f8b25c5-f717-4dc9-816d-15f2669b4c28','9e806c76-13f2-11f1-82dd-02509507bd80','Hoàn thành: Bón phân',NULL,'2026-03-02 16:18:35',NULL,NULL),('891ab7c2-0639-4fe3-aa26-cd20c5aa9454','ab897464-57f7-420e-819c-5b897fc4aa70','8729c462-c5e5-41be-a792-4b2173cf34f1','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành: Thu hoạch',NULL,'2026-03-02 15:07:14',NULL,NULL),('9ef828e4-b8ae-4970-a7b0-86a40bb626e9','a859edb6-79be-449c-83fb-eddbf16abfa6','ef0d8d76-f419-4ac0-b8fc-9a0c2f3c2473','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành: Làm cỏ',NULL,'2026-03-02 16:16:52',NULL,NULL),('a6478582-5f96-4757-a54b-ee608aba45fe',NULL,'fb0cebec-8efc-4c1a-98a3-a4d1f0847ef8','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành giai đoạn: Chăm bón - Lạc hè 2026',NULL,'2026-03-02 07:15:02',NULL,NULL),('bbd6617c-9f5a-4c23-be7e-d34021d20e17','3daacd9d-9949-4b80-a623-b68965268377','ed6567cd-2878-4c44-b6c2-86818532bbeb','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành: gieo trồng',NULL,'2026-03-02 02:09:55',NULL,NULL),('ccea94fe-5820-4dd0-add2-2a0e586478ae','ba678cd4-caaa-4f5c-8dbc-6df4c4406e03','ef0d8d76-f419-4ac0-b8fc-9a0c2f3c2473','9e806cf6-13f2-11f1-82dd-02509507bd80','Hoàn thành: xới đất',NULL,'2026-03-02 15:39:19',NULL,NULL),('d09c38f6-9640-4b22-8e1b-062c9100da67','cb631b2d-2cc1-4e9c-aa5a-9c6e5c8cfd6f','8729c462-c5e5-41be-a792-4b2173cf34f1','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành công việc: Chăm sóc\nGiai đoạn: Chăm sóc\nMùa vụ: Dâu tây 2026',NULL,'2026-03-02 15:24:50',NULL,NULL),('fbdbbf44-ac87-48fa-b65c-f17493f029ba','2674db82-a077-417a-8bb6-039d0c989338','09f2ba59-4bfa-43eb-a761-665237f20694','9e806a0c-13f2-11f1-82dd-02509507bd80','Hoàn thành công việc: a\nGiai đoạn: Chuẩn bị\nMùa vụ: a',NULL,'2026-03-02 15:16:44',NULL,NULL);
 /*!40000 ALTER TABLE `work_logs` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+COMMIT;
 
-/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-
--- Dump completed on 2026-03-02 23:40:51
