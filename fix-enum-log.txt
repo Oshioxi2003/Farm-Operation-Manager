@@ -1,8 +1,0 @@
-2026-03-02T12:36:06.510Z Found .env file
-2026-03-02T12:36:06.521Z Connecting to DB...
-2026-03-02T12:36:07.905Z Connected!
-2026-03-02T12:36:08.142Z FK checks disabled
-2026-03-02T12:36:08.451Z seasons.current_stage updated
-2026-03-02T12:36:08.759Z tasks.stage updated
-2026-03-02T12:36:08.998Z FK checks re-enabled
-2026-03-02T12:36:08.999Z ALL DONE!
